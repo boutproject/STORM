@@ -1,0 +1,241 @@
+timestep              = 25              # Timestep length of outputted data
+nout                  = 1                  # Number of outputted timesteps
+restart               = true
+dump_on_restart       = false
+
+
+MZ                    = 128                 # Number of Z points
+zmin                  = 0
+zmax                  = 15.9155             # 1.5915*2pi = 10, z is fracs of 2pi
+
+#NXPE                 = 6                   # Sets the number of processors in the x direction 
+MXG                   = 2                   # Number of X guard cells
+MYG                   = 2                   # Number of Y guard cells
+
+periodicX             = 0                   # Sets periodicity in the x direction 1=on, 0 =off
+#ballooning           = true                # Not sure what this does
+
+[mesh:ddx]
+first                 = C2
+second                = C2
+upwind                = C2
+flux                  = SPLIT
+
+[mesh:ddy]
+first                 = C2
+second                = C2
+upwind                = U2
+flux                  = SPLIT
+
+[mesh:ddz]
+first                 = C2
+second                = C2
+upwind                = C2
+flux                  = SPLIT
+
+[output]
+floats                = false               # Sets outputs to floats/doubles
+
+[mesh]
+StaggerGrids          = true                # Enables staggered grids
+Ly                    = 5500.0
+Lx                    = 150.0
+nx                    = 196                 # including 4 guard cells
+ny                    = 16                  # excluding guard cells
+dx                    = Lx/(nx-4)
+dy                    = Ly/ny 
+
+ixseps1               = -1           # Set x location of separatrix 1
+ixseps2               = 0           # Set x location of separatrix 2
+#ny_inner             =
+#jyseps1_1            = -1
+#jyseps1_2            = -1
+#jyseps2_1            = -1
+#jyseps2_2            = 63 
+
+symmetricGlobalY      = true
+
+[laplace] 
+type                  = cyclic
+global_flags           = 0 
+inner_boundary_flags  = 16
+outer_boundary_flags  = 16
+include_yguards       = false
+
+[solver]
+mms                   = false
+type                  = rk4
+timestep              = 0.01
+
+[storm]
+B_0                   = 0.5                 # Tesla 
+T_e0                  = 40                  # eV
+T_i0                  = 40                  # eV
+m_i                   = 2                   # Atomic Units
+q                     = 7                   # Dimensionless
+R_c                   = 1.5                 # m
+n_0                   = 0.8e19              # m^-3
+Z                     = 1                   # Dimensionless
+loglambda             = -1                  # Dimensionless
+phi_wall              = 0
+
+# If these parameters are specified, they will be used instead of the values calculated from the primary parameters above. 
+# mu_n0                 = 0.01
+# mu_vort0              = 0.01
+# mu                    = 3640
+# nu_parallel0          = 1000
+# g0                    = 0.0025
+
+old_phi_wall_value    = false
+isothermal            = false
+boussinesq            = true
+uniform_diss_paras    = false
+verbose               = false
+normalise_lengths     = false 
+bracket               = 2                   # 0 = std, 1 = simple, 2 = arakawa
+phi_BC_Newton_Raphson = false
+curv_n_ExB            = true
+curv_n_dia            = true
+curv_vort_local       = false
+curv_vort_global      = true
+curv_T_ExB            = true
+curv_T_dia            = true
+curv_T_gyro           = true
+init_bg               = true 
+add_blob              = true   
+symmetry_plane        = true
+run_1d                = false
+
+[blob]
+delta_perp            = 10.0
+elongation            = 1.0
+A                     = 2.0
+L_b                   = 0.5
+xoffset               = 0.25
+boltzmann             = false
+delta_front           = 0.1  
+conserve_momentum     = false
+A_relative_to_bg      = true
+
+#### For temperature blob
+delta_perp_T          = 5.38
+elongation_T          = 1.49
+A_T                   = 0.
+L_b_T                 = 0.5
+xoffset_T             = 0.3
+zoffset_T             = 0.5
+angle_blob_T          = 0
+delta_front_T         = 0.1
+
+[turb]
+max_xmode             = 25
+max_ymode             = 25
+max_zmode             = 25
+amplitude_n           = 0.001
+amplitude_T           = 0.001
+
+# [All]
+# scale               = 0.0
+# xs_opt              = 3
+# zs_opt              = 3
+# bndry_yin           = dirichlet(10)
+# bndry_yout          = dirichlet(-10)
+evolve_bndry          = false
+
+[S]
+scale = 1.0
+# function    = 10*exp(10.0*y/(2*pi))/(exp(10.0)-1.0)                                                         # Sheath loc
+# function    = 10*exp(10.0*(y-pi)/(pi))/(0.5*(exp(10.0)-1.0))+10*exp(10.0*(pi-y)/(pi))/(0.5*(exp(10.0)-1.0)) # Sheath loc, no sym plane
+# function    = 2*sqrt(100/pi)*exp(-100*(0.5*y/pi)^2)                                                         # Midplane loc
+# function    = 1.0                                                                                           # Constant
+# function    = 0.2*10*exp(10.0*y/(2*pi))/(exp(10.0)-1.0) + 0.8*2*sqrt(100/pi)*exp(-100*(0.5*y/pi)^2)
+function    = 0.7*10*exp(10.0*y/(2*pi))/(exp(10.0)-1.0)                                                       # Sheath loc, norm-ed so n = 1 at midplane
+# function    = 0.7*10*(exp(10.0*(y-pi)/pi)+exp(-10.0*(y-pi)/pi))/(exp(10.0)-1.0)/0.5                         # Sheath loc, no sym plane, norm-ed so n = 1 at midplane
+
+[S_E]
+scale                 = 1.0;
+function            = 16.0*exp(-5.0*y/(2*pi))
+# function              = 16.0*(exp(-5.0*(y-pi)/pi)*H(y-pi)+exp(5.0*(y-pi)/pi)*H(-y+pi))/0.5 # no sym plane
+
+[n]
+scale = 1.0
+function              = 1.0
+
+bndry_yup             = free_o3 
+bndry_ydown           = neumann_o2   #if symmetry_plane=true
+# bndry_ydown           = free_o3         #if symmatry_plane=false
+bndry_xin             = neumann_o2
+bndry_xout            = neumann_o2
+
+[T]
+scale = 1.0
+function = 1.0
+bndry_yup             = free_o3
+bndry_ydown           = neumann_o2   #if symmetry_plane=true
+# bndry_ydown           = free_o3         #if symmatry_plane=false
+bndry_xin             = neumann_o2
+bndry_xout            = neumann_o2
+
+[vort]
+scale = 1.0
+function              = 0.0 
+
+bndry_yup             = free_o3 
+bndry_ydown           = neumann_o2   #if symmetry_plane=true
+# bndry_ydown           = free_o3         #if symmatry_plane=false
+bndry_xin             = neumann_o2
+bndry_xout            = neumann_o2
+
+[U]
+scale = 1.0
+function             = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
+# function              = exp(-10)*(exp( 10*((y-pi)/pi)) - exp( 10*((pi-y)/pi))) #if symmetry_plane=false
+
+bndry_xin             = neumann_o2
+bndry_xout            = neumann_o2
+bndry_yup             = none
+bndry_ydown           = dirichlet_o2
+
+[V]
+scale = 1.0
+function             = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
+# function              = exp(-10)*(exp( 10*((y-pi)/pi)) - exp( 10*((pi-y)/pi))) #if symmetry_plane=false
+
+bndry_xin             = neumann_o2
+bndry_xout            = neumann_o2
+bndry_yup             = none 
+bndry_ydown           = dirichlet_o2
+
+[qpar]
+scale = 1.0
+function = 0.0
+
+bndry_xin             = neumann_o2
+bndry_xout            = neumann_o2
+bndry_yup             = none
+bndry_ydown           = dirichlet_o2   #if symmetry_plane=true
+# bndry_ydown           = none  #if symmetry_plane=false
+
+[phi]
+scale = 1.0
+function              = (storm:phi_wall) + 3.18
+
+bndry_yup             = free_o3 
+bndry_ydown           = neumann_o2 #if symmetry_plane=true
+# bndry_ydown           = free_o3  #if symmetry_plane=false
+bndry_xin             = none 
+bndry_xout            = none 
+
+[phi_stag]
+function              = 0.0
+
+bndry_yup             = none 
+bndry_ydown           = none 
+bndry_xin             = free_o3
+bndry_xout            = free_o3
+
+[uE2]
+bndry_xin = free_o3
+bndry_xout = free_o3
+bndry_yup = free_o3
+bndry_ydown = free_o3

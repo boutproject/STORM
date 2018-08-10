@@ -1,0 +1,84 @@
+#!/usr/bin/env python
+
+# Copyright L. Easy, F. Militello, T. Nicholas, J. Omotani, F. Riva, N.
+# Walkden, UKAEA, 2017, 2018
+# email: fulvio.militello@ukaea.uk
+#
+# This file is part of the STORM module of BOUT++.
+#
+# STORM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# STORM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with STORM.  If not, see <https://www.gnu.org/licenses/>.
+
+from boututils.run_wrapper import shell, launch, getmpirun
+from boutdata import collect
+from boutdata.data import BoutOptionsFile
+import numpy as np
+import os
+import shutil
+
+delta_perp_list = [10,12,14,16,18,20,25,30,35,40,45,50,55,60]
+sheath_dissipation = True
+short_run = True  
+nproc = 8
+
+MPIRUN = getmpirun()
+
+for delta_perp in delta_perp_list:
+  print "running delta_perp =", delta_perp
+  path = "d" + str(delta_perp)
+  if (sheath_dissipation):
+    path = path + "_SD"
+  else:
+    path = path + "_VA"
+    
+  if(short_run):
+    path = path + "_s"
+  if not os.path.exists(path):
+    os.makedirs(path)
+  
+  shutil.copy("data/BOUT.inp", path)
+  
+  # Determine timestep to use
+  options = BoutOptionsFile(path+"/BOUT.inp")
+  storm_options = options["storm"]
+  Te = storm_options.evaluate_scalar("T_e0")
+  e = 1.602176565e-19
+  m_i = storm_options.evaluate_scalar("m_i")*1.66053892e-27
+  B0 = storm_options.evaluate_scalar("B_0")
+  Omega_i = e*B0/m_i
+  c_s = (Te*e/m_i)**0.5
+  rho_s = c_s/Omega_i
+  R_c = storm_options.evaluate_scalar("R_c")
+  g = 2*(rho_s)/R_c
+  interchange_time = (float(delta_perp)/g)**0.5
+  
+  timestep = 100 
+  
+  if(short_run):
+    timestep = interchange_time/3
+  
+  # Need to scale dx, Zmax by delta_perp
+  Lx = 15.0*delta_perp
+  Lz = 10.0*delta_perp
+  
+  arguments = "-d " + path + " timestep=" + str(timestep) + " mesh:Lx=" + str(Lx) + " mesh:Lz=" + str(Lz) + " blob:delta_x=" + str(delta_perp) + " blob:delta_z=" + str(delta_perp)
+  
+  # Command to run
+  cmd = "./storm2d " + arguments
+  # Launch using MPI
+  s, out = launch(cmd, runcmd=MPIRUN, nproc=nproc, pipe=True)
+  
+  # Save output to log file
+  f = open(path+"/output.log", "w")
+  f.write(out)
+  f.close()

@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+
+# Copyright L. Easy, F. Militello, T. Nicholas, J. Omotani, F. Riva, N.
+# Walkden, UKAEA, 2017, 2018
+# email: fulvio.militello@ukaea.uk
+#
+# This file is part of the STORM module of BOUT++.
+#
+# STORM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# STORM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with STORM.  If not, see <https://www.gnu.org/licenses/>.
+
+from boututils import shell, launch, getmpirun, showdata
+from boutdata import collect
+from scipy import io as sio
+import numpy as np
+import os
+import shutil
+
+nu_par_sheath_list = [10000] #, 10, 100, 1000, 10000, 100000]
+delta_perp_list = [4,8,12,16,20,24,28]
+
+for nu_par_sheath in nu_par_sheath_list:
+  for delta_perp in delta_perp_list:
+  
+    path = "nupar" + str(nu_par_sheath)+ "_delta" + str(delta_perp)
+    scriptname = path + ".pbs"
+    jobname = "n" + str(nu_par_sheath)+"_d" + str(delta_perp)
+      
+    # move output files to data directory
+    shell("mv " + jobname + ".* "+path)
+    
+    os.chdir(path)
+
+    #Read in Data
+    t = collect('t_array')
+    n    = collect('n',    yguards = True)
+    U    = collect('U',    yguards = True)
+    V    = collect('V',    yguards = True)
+    phi  = collect('phi',  yguards = True)
+    vort = collect('vort', yguards = True)
+    n_eq    = collect('n_eq',    yguards = True)
+    U_eq    = collect('U_eq',    yguards = True)
+    V_eq    = collect('V_eq',    yguards = True)
+    phi_eq  = collect('phi_eq',  yguards = True)
+
+    sio.savemat(path+".mat", mdict={'t':t, 'n':n, 'U':U, 'V':V, 'phi':phi, 'vort':vort, 'n_eq': n_eq, 'U_eq':U_eq, 'V_eq':V_eq, 'phi_eq':phi_eq})
+
+    os.chdir('../')

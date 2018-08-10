@@ -1,0 +1,161 @@
+timestep              = 25              # Timestep length of outputted data
+nout                  = 20                  # Number of outputted timesteps
+
+MZ                    = 128                 # Number of Z points
+zmin                  = 0
+zmax                  = storm:Lz/2./pi      # z is fracs of 2pi
+
+[mesh]
+StaggerGrids          = true                # Enables staggered grids
+Ly                    = 5500.0
+Lx                    = 150.0
+nx                    = 196                 # including 4 guard cells
+ny                    = 16                  # excluding guard cells
+dx                    = Lx/(nx-4)
+dy                    = Ly/ny 
+
+ixseps1               = -1           # Set x location of separatrix 1
+ixseps2               = 0           # Set x location of separatrix 2
+
+[storm]
+B_0                   = 0.5                 # Tesla 
+T_e0                  = 40                  # eV
+T_i0                  = 40                  # eV
+m_i                   = 2                   # Atomic Units
+q                     = 7                   # Dimensionless
+R_c                   = 1.5                 # m
+n_0                   = 0.8e19              # m^-3
+loglambda             = -1                  # Dimensionless
+phi_wall              = 0
+
+# If these parameters are specified, they will be used instead of the values calculated from the primary parameters above.
+# mu_n0                 = 0.01
+# mu_vort0              = 0.01
+# mu                    = 3640
+# nu_parallel0          = 1000
+# g0                    = 0.0025
+
+isothermal            = false
+uniform_diss_paras    = false
+verbose               = false
+bracket               = 2                   # 0 = std, 1 = simple, 2 = arakawa
+add_blob              = true
+symmetry_plane        = true
+run_1d                = false
+
+[blob]
+delta_perp            = 10.0
+elongation            = 1.0
+A                     = 2.0
+L_b                   = 0.5
+xoffset               = 0.25
+boltzmann             = false
+delta_front           = 0.1
+conserve_momentum     = false
+A_relative_to_bg      = true
+
+#### For temperature blob
+delta_perp_T          = 10.
+elongation_T          = 1.0
+A_T                   = 0.
+L_b_T                 = 0.5
+xoffset_T             = 0.25
+zoffset_T             = 0.5
+angle_blob_T          = 0
+delta_front_T         = 0.1
+
+[S]
+function              = 0.7*10*exp(10.0*y/(2*pi))/(exp(10.0)-1.0)  # Sheath loc, norm-ed so n = 1 at midplane
+
+[S_E]
+function              = 16.0*exp(-5.0*y/(2*pi))
+
+[n]
+function              = 1.0
+
+bndry_yup             = free_o3
+bndry_ydown           = neumann   #if symmetry_plane=true
+bndry_xin             = neumann
+bndry_xout            = neumann
+
+[T]
+function = 1.0
+
+bndry_yup             = free_o3
+bndry_ydown           = neumann   #if symmetry_plane=true
+bndry_xin             = neumann
+bndry_xout            = neumann
+
+[vort]
+function              = 0.0
+
+bndry_yup             = free_o3
+bndry_ydown           = neumann   #if symmetry_plane=true
+bndry_xin             = neumann
+bndry_xout            = neumann
+
+[U]
+function              = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
+
+bndry_xin             = neumann
+bndry_xout            = neumann
+bndry_yup             = none
+bndry_ydown           = dirichlet   #if symmetry_plane=true
+
+[V]
+function              = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
+
+bndry_xin             = neumann
+bndry_xout            = neumann
+bndry_yup             = none
+bndry_ydown           = dirichlet   #if symmetry_plane=true
+
+[qpar]
+bndry_xin             = none
+bndry_xout            = none
+bndry_yup             = none
+bndry_ydown           = dirichlet   #if symmetry_plane=true
+
+[phi]
+function              = (storm:phi_wall) + 3.18
+
+bndry_yup             = free_o3
+bndry_ydown           = neumann #if symmetry_plane=true
+bndry_xin             = none
+bndry_xout            = none
+
+[phi_stag]
+bndry_yup             = none
+bndry_ydown           = none
+bndry_xin             = free_o3
+bndry_xout            = free_o3
+
+[laplace]
+global_flags           = 0
+inner_boundary_flags  = 16
+outer_boundary_flags  = 16
+
+[solver]
+type                  = pvode
+mxstep                = 100000000           # max steps before result is deemed not to converge
+# atol                = 1.0e-12             # absolute tolerance
+# rtol                = 1.0e-5              # relative tolerance
+
+[mesh:ddx]
+first                 = C2
+second                = C2
+upwind                = C2
+
+[mesh:ddy]
+first                 = C2
+second                = C2
+upwind                = U2
+
+[mesh:ddz]
+first                 = C2
+second                = C2
+upwind                = C2
+
+[output]
+floats                = false               # Sets outputs to floats/doubles
+

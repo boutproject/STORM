@@ -1,0 +1,81 @@
+timestep              = 25                  # Timestep length of outputted data
+nout                  = 20                  # Number of outputted timesteps
+
+MZ                    = 256                 # Number of Z points
+zmin                  = 0
+zmax                  = mesh:Lz/2./pi       # input z is fracs of 2pi
+myg                   = 0                   # No need for Y communications
+
+[mesh]
+Ly                    = 5500.0
+Lx                    = 150.0
+Lz                    = 100.0
+
+nx                    = 388                 # including 4 guard cells
+ny                    = 1                   # excluding guard cells
+dx                    = Lx/(nx-4)
+
+[storm]
+B_0                   = 0.5                 # Tesla
+T_e0                  = 20                  # eV
+T_i0                  = 20                  # eV
+m_i                   = 2                   # Atomic Units
+q                     = 7                   # Dimensionless
+R_c                   = 1.5                 # m
+n_0                   = 0.5e19              # m^-3
+Z                     = 1                   # Dimensionless
+loglambda             = -1                  # Dimensionless
+
+bracket               = 2                   # 0 = std, 1 = simple, 2 = arakawa
+isothermal            = true                # switch for isothermal simulations
+SOL_closure           = sheath_diss         # choice of parallel closure to use
+
+[blob]
+A = 2
+delta_x = 10
+delta_z = 10
+x0 = 0.25
+z0 = 0.5
+
+[All]
+bndry_all = neumann
+
+[n]
+function = 1.0 + (blob:A)*exp(-(mesh:Lx*(x-blob:x0)/blob:delta_x)*(mesh:Lx*(x-blob:x0)/blob:delta_x))*exp(-(mesh:Lz*((z/(2*pi))-blob:z0)/blob:delta_z)*(mesh:Lz*((z/(2*pi))- blob:z0)/blob:delta_z))
+
+[T]
+function = 1.
+
+[vort]
+#function = 0.
+
+[sigma_n]     # Density sink
+#function = 1.119e-4
+
+[sigma_T]     # Temperature sink
+#function = 2.326e-3
+
+[sigma_vort]  # Vorticity sink
+#function = 1.119e-4
+
+[mesh:ddx]
+first                 = C2
+second                = C2
+upwind                = C2
+
+[mesh:ddz]
+first                 = C2
+second                = C2
+upwind                = C2
+
+[laplace] 
+global_flags          = 0
+inner_boundary_flags  = 0
+outer_boundary_flags  = 0
+
+[solver]
+type=pvode
+mxstep = 100000000       # max steps before result is deemed not to converge
+#atol =   1e-12          # Absolute tolerance
+#rtol =   1e-5           # Relative tolerance
+

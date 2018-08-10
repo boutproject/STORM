@@ -1,0 +1,2 @@
+# make.config sets user-defined values, for example the path to the BOUT++ directory
+BOUT_TOP       =../../BOUT-dev

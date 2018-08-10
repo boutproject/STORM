@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+
+# Copyright L. Easy, F. Militello, T. Nicholas, J. Omotani, F. Riva, N.
+# Walkden, UKAEA, 2017, 2018
+# email: fulvio.militello@ukaea.uk
+#
+# This file is part of the STORM module of BOUT++.
+#
+# STORM is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# STORM is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with STORM.  If not, see <https://www.gnu.org/licenses/>.
+
+# Tested with python 2.6.6:
+# -isothermal:
+#   -run1d         : ok (it does not work with 3.3.5)
+#   -full, serial  : ok (it does not work with 3.3.5)
+#   -full, parallel: ok
+# -non-isothermal:
+#   -run1d         : - no (starting from scratch, one iteration, then crushes)
+#                    - ok (starting from an isothermal run and keeping eq. files)
+#   -full, serial  : - no (starting from scratch, crushes right away)
+#                    -    (starting from a succesfull nonisothermal run1d) 
+#   -full, parallel:
+
+from __future__ import division
+from boutdata.data import BoutOptionsFile
+from boututils.run_wrapper import shell, launch, getmpirun
+from boututils.datafile import DataFile
+from boutdata import collect
+from scipy import io as sio
+import numpy as np
+import os
+from sys import exit
+import argparse
+
+scriptDirectory = os.path.dirname(os.path.realpath(__file__))
+executable = os.path.join(scriptDirectory,"storm ")
+matlabfilename = "/background"
+restarting = False
+run_1d = True
+nc_save = True
+nproc = 4
+MPIRUN = getmpirun()
+
+# get command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("datadir", nargs='?', default="data")
+args = parser.parse_args()
+datadir = args.datadir+"/"
+
+if run_1d:
+    iterationlength = 100000
+    tol = 1.e-5
+    rtol = 1.e-8
+else:
+    iterationlength = 4000
+    tol = 0.001
+    rtol = None
+
+# Get input options from BOUT.inp
+# Defaults should match storm.cxx
+# NB converting booleans from strings using '<variable>=="true"', assuming BOUT++ input file is written in, or converted to, lower case
+options=BoutOptionsFile(datadir+"BOUT.inp")
+try:
+    isothermal = (options["storm"]["isothermal"]=="true")
+except KeyError:
+    isothermal = False
+try:
+    savepath = options["storm"]["equilibrium_file_path"]
+except KeyError:
+    savepath = datadir+"equilibrium"
+try:
+    mxg = int(options["mxg"])
+except KeyError:
+    mxg = 2
+# read grid from:
+#   i) grid file in global 'grid' option
+#   ii) grid file in 'mesh:file' option
+#   iii) options from 'mesh' section
+gridfile = False
+if "grid" in options:
+    gridfile = True
+    f = DataFile(options["grid"])
+elif "file" in options["mesh"]:
+    gridfile = True
+    f = DataFile(options["mesh"]["file"])
+if gridfile:
+    Lx = f.read("Lx")
+    Ly = f.read("Ly")
+    Nx = f.read("Nx")-2*mxg
+    Ny = f.read("Ny")
+    # Also need to set other stuff from grid file through mesh:... options
+    # e.g. if metric is not identity would need to pass that across somehow, at least g_22 and g22 components
+    ixseps1 = f.read("ixseps1")
+    ixseps2 = f.read("ixseps2")
+else:
+    try:
+        Nx = int(options["mesh"]["nx"])-2*mxg
+    except ValueError:
+        if run_1d:
+            pass
+
+if run_1d:
+  nproc = 1
+  Nx = 1
+
+if not os.path.exists(savepath):
+  os.makedirs(savepath)
+
+# shell("cp "+datadir+"BOUT.inp "+datadir+"BOUT.inp.tmp")
+shell("sed -i.bak '/grid =/d' "+datadir+"BOUT.inp")
+
+args = "-d "+datadir+" timestep=" + str(iterationlength) + " nout=1" + " MZ=1" + " storm:g0=0" + " storm:add_blob=false"
+
+if gridfile:
+    # mesh options will not be defined in BOUT.inp, need to pass them through here
+    args = args + " mesh:ixseps1=" + str(ixseps1) + " mesh:ixseps2=" + str(ixseps2) + " mesh:Ly=" + str(Ly) + " mesh:dx="+str(float(Lx)/Nx) + " mesh:ny=" + str(Ny) + " mesh:dy=" + str(float(Ly)/Ny)
+    if not run_1d:
+        args = args + " mesh:nx=" + str(Nx+2*mxg)
+
+if run_1d:
+    args = args + " mesh:nx=" + str(Nx+2*mxg) +  " storm:run_1d=true nxpe=1 phi_stag:bndry_xin=neumann phi_stag:bndry_xout=neumann"
+else:
+  args = args + " storm:nu_parallel0=1000.0"
+  
+if rtol is not None:
+  args = args + " solver:rtol="+str(rtol)
+
+i=0
+shell("echo Running iteration "+str(i))
+
+if(restarting == False):
+  # Run initial simulation with phi_bndry = 0 
+  # and without loading equilibrium profiles
+  first_iteration_args = args + " storm:equilibrium_source=input_file"
+  cmd = executable + first_iteration_args
+  print("Running first step with " + first_iteration_args, flush=True)
+  s, out = launch(cmd, runcmd=MPIRUN, nproc=nproc, pipe=True, output="create_bg_run.log")
+
+phi = collect('phi', path=datadir, info=False, yguards=True)
+phi_error = 100*np.max(np.abs(phi[-1,(Nx+2*mxg)//2,:,0]))
+shell("echo Error = "+str(phi_error))
+
+phibndry = np.copy(phi[-1, (Nx+2*mxg)//2, :, 0])
+datafile = open(savepath + '/phi_eq.dat', 'wb')
+phibndry.tofile(datafile)
+datafile.close()
+
+i = 1
+
+args = "restart=true append=true " + args
+
+print("Running with " + args, flush=True)
+
+cmd = executable + args
+
+while phi_error > tol:
+  shell("echo Running iteration "+str(i))
+  
+  s, out = launch(cmd, runcmd=MPIRUN, nproc=nproc, pipe=True)
+  if s:
+      raise ValueError("STORM returned with value " + str(s))
+
+  phi = collect('phi', path=datadir, info=False, yguards=True)
+
+  print("max error is at",np.abs(phi[-1,(Nx+2*mxg)//2,:,0] - phibndry).argmax(),flush=True)
+  phi_error = 100*np.max(np.abs(phi[-1,(Nx+2*mxg)//2,:,0] - phibndry))
+  shell("echo Error = "+str(phi_error))
+
+  phibndry = phi[-1, (Nx+2*mxg)//2, :, 0]
+  datafile = open(savepath + '/phi_eq.dat', 'wb')
+  phibndry.tofile(datafile)
+  datafile.close()
+  
+  i = i + 1 
+  if phi_error < tol:
+    print("phi_error = %e, < tol = %e" % (phi_error, tol),flush=True)    
+    print("Finished iterations, exiting",flush=True)
+    
+shell("mv "+datadir+"BOUT.inp.bak "+datadir+"BOUT.inp")    
+    
+# Save to python, matlab format
+phi_eq = collect('phi', yguards=True, path=datadir, info=False)
+n_eq = collect('n',yguards=True,path=datadir,info=False)
+U_eq = collect('U',yguards=True,path=datadir,info=False)
+V_eq = collect('V',yguards=True,path=datadir,info=False)
+if(isothermal == False):
+  T_eq = collect('T',yguards=True,path=datadir,info=False)
+
+phi_eq = phi_eq[-1, (Nx+2*mxg)//2, :, 0]
+n_eq   =   n_eq[-1, (Nx+2*mxg)//2, :, 0]
+U_eq   =   U_eq[-1, (Nx+2*mxg)//2, :, 0]
+V_eq   =   V_eq[-1, (Nx+2*mxg)//2, :, 0]
+if(isothermal == False):
+  T_eq   =   T_eq[-1, (Nx+2*mxg)//2, :, 0]
+
+if isothermal:
+  sio.savemat(savepath + matlabfilename, mdict={'n_eq': n_eq, 'U_eq':U_eq, 'V_eq':V_eq, 'phi_eq':phi_eq})
+else:
+  sio.savemat(savepath + matlabfilename, mdict={'n_eq': n_eq, 'U_eq':U_eq, 'V_eq':V_eq, 'phi_eq':phi_eq, 'T_eq':T_eq})
+
+datafile = open(savepath + "/phi_eq.dat", 'wb')
+phi_eq.tofile(datafile)
+datafile.close()
+
+datafile = open(savepath + "/n_eq.dat", 'wb')
+n_eq.tofile(datafile)
+datafile.close()
+
+datafile = open(savepath + "/U_eq.dat", 'wb')
+U_eq.tofile(datafile)
+datafile.close()
+
+datafile = open(savepath + "/V_eq.dat", 'wb')
+V_eq.tofile(datafile)
+datafile.close()
+
+if(isothermal== False):
+  datafile = open(savepath + "/T_eq.dat", 'wb')
+  T_eq.tofile(datafile)
+  datafile.close()
+
+if nc_save:
+  varlist = ['phi','n','U','V','vort']
+  f = DataFile(savepath + '/equilibrium.nc',write=True,create=True)
+  for var in varlist:
+    data = collect(var,yguards=True,path=datadir,info=False)
+    f.write(var,data)
+  if(isothermal==False):
+    data = collect('T',yguards=True,path=datadir,info=False)
+    f.write('T',data)   
+  f.close()
