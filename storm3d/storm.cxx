@@ -63,9 +63,9 @@ int STORM::init(bool restarting) {
   OPTION(options, equilibrium_file_path, "");
   if (equilibrium_file_path == "") {
     // The user has not explicitly set equilibrium_file_path, use path relative to simulation output directory instead
-    string equilibrium_directory;
+    std::string equilibrium_directory;
     OPTION(options, equilibrium_directory, "equilibrium");
-    string data_dir;
+    std::string data_dir;
     Options::getRoot()->get("datadir", data_dir, "data");
     equilibrium_file_path = data_dir + "/" + equilibrium_directory;
   }
@@ -279,10 +279,10 @@ int STORM::init(bool restarting) {
   output.write("\n\tkappa_par    = %e ", kappa0);
   output.write("\n\tkappa_perp   = %e ", kappa0_perp);
   output.write("\nDimensionless Lengths:") ;  
-  output.write("\n\tdx           = %e ", mesh->coordinates()->dx(0,0)) ; 
-  output.write("\n\tdy           = %e ", mesh->coordinates()->dy(0,0)) ; 
-  output.write("\n\tdz           = %e ", mesh->coordinates()->dz) ; 
-  output.write("\n\tzlength      = %e ", mesh->coordinates()->zlength()) ; 
+  output.write("\n\tdx           = %e ", mesh->getCoordinates()->dx(0,0));
+  output.write("\n\tdy           = %e ", mesh->getCoordinates()->dy(0,0));
+  output.write("\n\tdz           = %e ", mesh->getCoordinates()->dz);
+  output.write("\n\tzlength      = %e ", mesh->getCoordinates()->zlength());
   output.write("\n\tLx           = %e ", Lx) ; 
   output.write("\n\tLy           = %e ", Ly) ; 
   output.write("\n\tLz           = %e ", Lz) ; 

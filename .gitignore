@@ -49,6 +49,7 @@ Thumbs.db
 *.pkl
 *.nc
 BOUT.settings
+.BOUT.pid.*
 
 # videos and images #
 *.png

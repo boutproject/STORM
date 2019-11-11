@@ -26,7 +26,7 @@ void STORM::phisolver_1d(){
   if (symmetry_plane) {
     phi(mesh->xstart,mesh->yend,0) = 0;
     for (int j=mesh->yend; j>mesh->ystart; j--) {
-      phi(mesh->xstart,j-1,0) = phi(mesh->xstart,j,0) - gradpar_phi(mesh->xstart,j,0)*mesh->coordinates()->dy(mesh->xstart,j-1)*sqrt(mesh->coordinates()->g_22(mesh->xstart,j-1));
+      phi(mesh->xstart,j-1,0) = phi(mesh->xstart,j,0) - gradpar_phi(mesh->xstart,j,0)*mesh->getCoordinates()->dy(mesh->xstart,j-1)*sqrt(mesh->getCoordinates()->g_22(mesh->xstart,j-1));
     }
     BoutReal phi_upper;
     phi.applyBoundary();
@@ -41,11 +41,11 @@ void STORM::phisolver_1d(){
     Field3D phi_down = 0.;
     phi_up(mesh->xstart,mesh->ystart,0) = 0.;
     for (int j=mesh->ystart; j<mesh->yend; j++) {
-      phi_up(mesh->xstart,j+1,0) = phi_up(mesh->xstart,j,0) + gradpar_phi(mesh->xstart,j+1,0)*mesh->coordinates()->dy(mesh->xstart,j)*sqrt(mesh->coordinates()->g_22(mesh->xstart,j));
+      phi_up(mesh->xstart,j+1,0) = phi_up(mesh->xstart,j,0) + gradpar_phi(mesh->xstart,j+1,0)*mesh->getCoordinates()->dy(mesh->xstart,j)*sqrt(mesh->getCoordinates()->g_22(mesh->xstart,j));
     }
     phi_down(mesh->xstart,mesh->yend,0) = 0.;
     for (int j=mesh->yend; j>mesh->ystart; j--) {
-      phi_down(mesh->xstart,j-1,0) = phi_down(mesh->xstart,j,0) - gradpar_phi(mesh->xstart,j,0)*mesh->coordinates()->dy(mesh->xstart,j-1)*sqrt(mesh->coordinates()->g_22(mesh->xstart,j-1));
+      phi_down(mesh->xstart,j-1,0) = phi_down(mesh->xstart,j,0) - gradpar_phi(mesh->xstart,j,0)*mesh->getCoordinates()->dy(mesh->xstart,j-1)*sqrt(mesh->getCoordinates()->g_22(mesh->xstart,j-1));
     }
     phi = (phi_up+phi_down)/2.;
     BoutReal phi_lower, phi_upper;
@@ -70,35 +70,35 @@ void STORM::set_Lx_Ly_Lz() {
   if (Lx < 0.) {
     // Check grid spacings and metrics are constant, otherwis this way of calculating is incorrect.
     if (!(
-          min(mesh->coordinates()->dx, true) == max(mesh->coordinates()->dx, true)
-          && min(mesh->coordinates()->g_11, true) == max(mesh->coordinates()->g_11, true)
+          min(mesh->getCoordinates()->dx, true) == max(mesh->getCoordinates()->dx, true)
+          && min(mesh->getCoordinates()->g_11, true) == max(mesh->getCoordinates()->g_11, true)
           )) {
       throw BoutException("Error: g_11 or dx is not constant, so cannot calculate Lx here.");
     }
-    Lx = (mesh->GlobalNx - 4)*mesh->coordinates()->dx(mesh->xstart,mesh->ystart)*sqrt(mesh->coordinates()->g_11(mesh->xstart,mesh->ystart));
+    Lx = (mesh->GlobalNx - 4)*mesh->getCoordinates()->dx(mesh->xstart,mesh->ystart)*sqrt(mesh->getCoordinates()->g_11(mesh->xstart,mesh->ystart));
     output<<"\tLx input not found, setting to "<<Lx<<endl;
   }
   OPTION(options, Ly, -1.);
   if (Ly < 0.) {
     // Check grid spacings and metrics are constant, otherwis this way of calculating is incorrect.
     if (!(
-          min(mesh->coordinates()->dy, true) == max(mesh->coordinates()->dy, true)
-          && min(mesh->coordinates()->g_22, true) == max(mesh->coordinates()->g_22, true)
+          min(mesh->getCoordinates()->dy, true) == max(mesh->getCoordinates()->dy, true)
+          && min(mesh->getCoordinates()->g_22, true) == max(mesh->getCoordinates()->g_22, true)
           )) {
       throw BoutException("Error: g_22 or dy is not constant, so cannot calculate Ly here.");
     }
-    Ly = (mesh->GlobalNy - 4)*mesh->coordinates()->dy(mesh->xstart,mesh->ystart)*sqrt(mesh->coordinates()->g_22(mesh->xstart,mesh->ystart));
+    Ly = (mesh->GlobalNy - 4)*mesh->getCoordinates()->dy(mesh->xstart,mesh->ystart)*sqrt(mesh->getCoordinates()->g_22(mesh->xstart,mesh->ystart));
     output<<"\tLy input not found, setting to "<<Ly<<endl;
   }
   OPTION(options, Lz, -1.);
   if (Lz < 0.) {
     // Check grid spacings and metrics are constant, otherwis this way of calculating is incorrect.
     if (!(
-          min(mesh->coordinates()->g_33, true) == max(mesh->coordinates()->g_33, true)
+          min(mesh->getCoordinates()->g_33, true) == max(mesh->getCoordinates()->g_33, true)
           )) {
       throw BoutException("Error: g_33 is not constant, so cannot calculate Lz here.");
     }
-    Lz = mesh->GlobalNz*mesh->coordinates()->dz*sqrt(mesh->coordinates()->g_33(mesh->xstart,mesh->ystart)) ;
+    Lz = mesh->GlobalNz*mesh->getCoordinates()->dz*sqrt(mesh->getCoordinates()->g_33(mesh->xstart,mesh->ystart)) ;
     output<<"\tLz input not found, setting to "<<Lz<<endl;
   }
 }

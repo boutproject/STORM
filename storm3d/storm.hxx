@@ -76,32 +76,33 @@ private:
   Field3D UmV; //UmV = U-V
   Field3D UmV_centre;
 
-  Field3D Curv_n;               // Curv(n)
-  Field3D Curv_T;               // Curv(T)
-  Field3D Curv_p;               // Curv(p)
-  Field3D Curv_phi;             // Curv(phi)
+  Field3D Curv_n;   // Curv(n)
+  Field3D Curv_T;   // Curv(T)
+  Field3D Curv_p;   // Curv(p)
+  Field3D Curv_phi; // Curv(phi)
 
   // Fields and arrays used to initialise save background
   BoutReal *data, *phi_array_inner, *phi_array_outer;
   Field3D n_eq, U_eq, V_eq, phi_eq, T_eq, q_eq ;
-  string equilibrium_source;    // specifies which method to use to read in or initialise initial profiles
-  string equilibrium_file_path; // path to the directory where equilibrium files are stored
-  string equilibrium_data_file; // netcdf or hdf5 file with initial profiles.
-                                // If equilibrium_data_file is an empty string (the default value)
-                                // then read 1d initial profiles from .dat binary files
+  std::string equilibrium_source;    // specifies which method to use to read in or initialise initial profiles
+  std::string equilibrium_file_path; // path to the directory where equilibrium files are stored
+  std::string equilibrium_data_file; // netcdf or hdf5 file with initial profiles.
+                                     // If equilibrium_data_file is an empty string (the
+                                     // default value) then read 1d initial profiles from
+                                     // .dat binary files
 
-  BoutReal mu_n0;               // density diffusion coefficient
-  BoutReal mu_vort0;            // ion viscosity
-  BoutReal mu;                  // m_i/m_e
-  BoutReal nu_parallel0;        // electron-ion friction
+  BoutReal mu_n0;        // density diffusion coefficient
+  BoutReal mu_vort0;     // ion viscosity
+  BoutReal mu;           // m_i/m_e
+  BoutReal nu_parallel0; // electron-ion friction
   BoutReal g0;
-  BoutReal kappa0;              // parallel heat conduction
+  BoutReal kappa0;       // parallel heat conduction
   BoutReal kappa0_perp;
-  BoutReal phi_wall;            // potential of target walls.
+  BoutReal phi_wall;     // potential of target walls.
 
-  Field3D n_on_sqrt_T;          // working field for nonuniform diss params
+  Field3D n_on_sqrt_T;   // working field for nonuniform diss params
   Field3D Grad_par_phi, Grad_par_T;
-  Field3D powT_1_5_stag;        // pow(T_stag,1.5)
+  Field3D powT_1_5_stag; // pow(T_stag,1.5)
 
   // Parameters used to set normalisations correctly.
   BoutReal u, e, m_e, epsilon_0, mu_0;

@@ -26,5 +26,5 @@
 // Curvature operator
 const Field3D STORM::Curv(const Field3D &f){
   ASSERT1(f.getLocation() == CELL_CENTRE); //otherwise g_33 should be interpolated (not yet implemented in BOUT++)
-  return g0*DDZ(f)/sqrt(mesh->coordinates()->g_33);
+  return g0*DDZ(f)/sqrt(mesh->getCoordinates()->g_33);
 }
