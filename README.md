@@ -3,6 +3,13 @@ STORM
 
 STORM plasma simulation model, built using BOUT++ framework.
 
+This public release version of STORM is designed for seeded filament
+simulations in slab-like geometry. The model assumes cold ions, but includes
+electron temperature evolution. The current development version, used at
+UKAEA/CCFE may have significant features added that are not yet included in
+this public release. If you are interested in using features that have not been
+released yet, please contact us to set up a collaboration.
+
 Table of Contents
 -----------------
 
