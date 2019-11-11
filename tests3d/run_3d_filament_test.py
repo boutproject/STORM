@@ -113,6 +113,9 @@ def check_test():
 
     # Test output
     for name in evolvingVariables:
+        if len(run[name].shape) == 1:
+            # scalars are diagnostic outputs like wall-time, so not useful to test
+            continue
         # exclude second x guard cells as they are not used and may not always be set consistently
         data = testfield_slice(run[name], m_guards)
         expectedData = testfield_slice(runExpected.read(name), m_guards_expected)
