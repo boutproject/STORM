@@ -358,7 +358,7 @@ int STORM::rhs(BoutReal time) {
   phi.applyBoundary(time);
   mesh->communicate(phi);  
   
-  phi_stag = interp_to(phi, CELL_YLOW, RGN_NOBNDRY) ;
+  phi_stag = interp_to(phi, CELL_YLOW, "RGN_NOBNDRY");
   // Communicate before applying boundary condition in case there are not
   // enough grid points in the x-direction for free boundary conditions.
   // Don't need y-derivatives of phi_stag so don't need to communicate
@@ -390,16 +390,16 @@ int STORM::rhs(BoutReal time) {
 
   mesh->communicate(U, V);
 
-  V_centre = interp_to(V, CELL_CENTRE, RGN_NOBNDRY);
+  V_centre = interp_to(V, CELL_CENTRE, "RGN_NOBNDRY");
   UmV = U-V;
-  UmV_centre = interp_to(UmV, CELL_CENTRE, RGN_NOBNDRY);
+  UmV_centre = interp_to(UmV, CELL_CENTRE, "RGN_NOBNDRY");
   
   //*********** Calculate staggered interpolation for n and T, evaluate parameters depending on n and T ************
-  n_stag = interp_to(n, CELL_YLOW, RGN_NOBNDRY) ;
-  T_stag = interp_to(T, CELL_YLOW, RGN_NOBNDRY) ;
+  n_stag = interp_to(n, CELL_YLOW, "RGN_NOBNDRY");
+  T_stag = interp_to(T, CELL_YLOW, "RGN_NOBNDRY");
 
   // Calculate coefficients which are dependent on density
-  powT_1_5_stag = pow(T_stag, 1.5, RGN_NOBNDRY);
+  powT_1_5_stag = pow(T_stag, 1.5, "RGN_NOBNDRY");
   nu_parallel = n_stag*nu_parallel0/powT_1_5_stag ;
   
   if(!uniform_diss_paras){
@@ -509,7 +509,7 @@ int STORM::rhs(BoutReal time) {
              - Tcoef*Div_par(qpar,CELL_CENTRE)
              - 2./3.*0.71*UmV_centre*Grad_par(T)
              - (2./3.)*T*Div_par(V,CELL_CENTRE)
-             + 2.0/(3.0*mu)*nu_parallel0*(pow(T, -1.5, RGN_NOBNDRY))*n*SQ(UmV_centre)
+             + 2.0/(3.0*mu)*nu_parallel0*(pow(T, -1.5, "RGN_NOBNDRY"))*n*SQ(UmV_centre)
              + Tcoef*S_E
              + S*SQ(V_centre)/(3.*mu*n)
              - T*S/n ;

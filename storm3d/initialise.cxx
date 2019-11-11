@@ -78,7 +78,7 @@ void STORM::initialise_background(bool restarting){
     set_equilibrium_value_1d_array(phi_array_inner, phi_array_outer, phi);
   }
   else {
-    throw BoutException("Unrecognized equilibrium_source option '%s'", equilibrium_source);
+    throw BoutException("Unrecognized equilibrium_source option '%s'", equilibrium_source.c_str());
   }
 
   n_eq = n ;
@@ -106,7 +106,7 @@ void STORM::set_equilibrium_value(Field3D & f, const char * fname){
   read_equilibrium_file(data,fname);
   for(int i=0; i<mesh->LocalNx; i++){
     for(int j=0;j<mesh->LocalNy;j++){
-      int jglobal = mesh->YGLOBAL(j) + mesh->ystart;
+      int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
       for(int k=0;k<mesh->LocalNz;k++){
         f(i,j,k) = data[jglobal];
       }
@@ -133,7 +133,7 @@ void STORM::set_equilibrium_value_1d_array(BoutReal* &f_inner, BoutReal* &f_oute
       }
 #endif
       for(int j = 0; j < mesh->LocalNy; j++){
-        int jglobal = mesh->YGLOBAL(j) + mesh->ystart;
+        int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
         f_inner[jglobal] = 0.5*(f3d(mesh->xstart-1, j, 0) + f3d(mesh->xstart, j, 0)) ;
       }
     }
@@ -149,7 +149,7 @@ void STORM::set_equilibrium_value_1d_array(BoutReal* &f_inner, BoutReal* &f_oute
       }
 #endif
       for(int j = 0; j < mesh->LocalNy; j++){
-        int jglobal = mesh->YGLOBAL(j) + mesh->ystart;
+        int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
         f_outer[jglobal] = 0.5*(f3d(mesh->xend, j, 0) + f3d(mesh->xend+1, j, 0)) ;
       }
     }
@@ -192,7 +192,7 @@ void STORM::read_equilibrium_file(BoutReal * data, const char * fname){
     } else {
       // check we reached the end of the file
       // first try to read another byte from the file
-      int nextbyte = fgetc(file);
+      fgetc(file);
       // now the end-of-file indicator should be set
       if (!feof(file)) {
         throw BoutException("The input data in %s was longer than mesh->GlobalNy", fname);
@@ -208,14 +208,23 @@ void STORM::initialise_blob(const char * imp_section){
   // Parameters Used for Blob initialisation
   bool boltzmann ;             // Switch for initialising potential of blob to boltzmann response 
   bool conserve_momentum ;     // Switch for adjusting V when seeding blob such that nV is conserved
-  BoutReal delta_perp,delta_perp_T ;        // Perpendicular (x) length scale of blob
-  BoutReal elongation, elongation_T ;        // Elongation of the blob: ratio between z and x axis
-  BoutReal A, A_T ;                 // Blob amplitude
-  BoutReal L_b, L_b_T ;               // Parallel extent of blob
-  BoutReal xoffset, xoffset_T, zoffset, zoffset_T;           // starting x and z position of blob (between 0 and 1)
-  BoutReal angle_blob, angle_blob_T ;  //tilt of the blob with respect to vertical axis, in rad
-  BoutReal delta_front, delta_front_T ;       // Parameter used to control gradient of the blob front. 0 = step function
-  bool A_relative_to_bg ;  // Switch for controlling whether the amplitude of the blob is relative to the midplane density or not.
+  BoutReal delta_perp = 0.;    // Perpendicular (x) length scale of density blob
+  BoutReal delta_perp_T = 0.;  // Perpendicular (x) length scale of temperature blob
+  BoutReal elongation = 0.;    // Elongation of the density blob: ratio between z and x axis
+  BoutReal elongation_T = 0.;  // Elongation of the temperature blob: ratio between z and x axis
+  BoutReal A = 0.;             // Density blob amplitude
+  BoutReal A_T = 0.;           // Temperature blob amplitude
+  BoutReal L_b = 0.;           // Parallel extent of density blob
+  BoutReal L_b_T = 0.;         // Parallel extent of temperature blob
+  BoutReal xoffset = 0.;       // starting z position of density blob (between 0 and 1)
+  BoutReal xoffset_T = 0.;     // starting z position of temperature blob (between 0 and 1)
+  BoutReal zoffset = 0.;       // starting z position of density blob (between 0 and 1)
+  BoutReal zoffset_T = 0.;     // starting z position of temperature blob (between 0 and 1)
+  BoutReal angle_blob = 0.;    // tilt of the density blob with respect to vertical axis, in rad
+  BoutReal angle_blob_T = 0.;  // tilt of the temperature blob with respect to vertical axis, in rad
+  BoutReal delta_front = 0.;   // Parameter used to control gradient of the density blob front. 0 = step function
+  BoutReal delta_front_T = 0.; // Parameter used to control gradient of the temperature blob front. 0 = step function
+  bool A_relative_to_bg ;      // Switch for controlling whether the amplitude of the blob is relative to the midplane density or not.
   Options *blob_options = Options::getRoot()->getSection(imp_section);
   
   OPTION(blob_options, delta_perp,          10) ;
@@ -267,7 +276,8 @@ void STORM::initialise_blob(const char * imp_section){
     BoutReal *n_array,*T_array;
     n_array = new BoutReal[mesh->GlobalNy];
     T_array = new BoutReal[mesh->GlobalNy];
-    BoutReal nref,Tref;
+    BoutReal nref = 0.;
+    BoutReal Tref = 0.;
     read_equilibrium_file(n_array,"n_eq.dat");
     if(symmetry_plane){
       nref = n_array[mesh->ystart];

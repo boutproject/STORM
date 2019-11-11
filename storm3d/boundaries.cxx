@@ -151,7 +151,7 @@ void STORM::set_xguards(Field3D &f, const BoutReal *g_inner, const BoutReal *g_o
   if (mesh->firstX()) {
     for (i=mesh->xstart-1; i>=0; i--) {
       for (j=0; j < mesh->LocalNy ; j++) {
-        int jglobal = mesh->YGLOBAL(j) + mesh->ystart;
+        int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
         for (k=0; k < mesh->LocalNz ; k++) {
           f(i, j, k)   = g_inner[jglobal] ;
         }
@@ -161,7 +161,7 @@ void STORM::set_xguards(Field3D &f, const BoutReal *g_inner, const BoutReal *g_o
   if (mesh->lastX()) {
     for (i=mesh->xend+1; i<mesh->LocalNx; i++) {
       for (j=0; j < mesh->LocalNy ; j++) {
-        int jglobal = mesh->YGLOBAL(j) + mesh->ystart;
+        int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
         for (k=0; k < mesh->LocalNz ; k++) {
           f(i, j, k)   = g_outer[jglobal] ;
         }
