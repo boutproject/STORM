@@ -68,7 +68,7 @@ private:
   class Laplacian* phiSolver;           // Laplacian solver for vort -> phi
 };
 
-int STORM2D::init(bool restart) {
+int STORM2D::init(bool UNUSED(restarting)) {
   
   Options *options = Options::getRoot()->getSection("storm");
   
@@ -290,7 +290,7 @@ int STORM2D::init(bool restart) {
   return 0;
 }
 
-int STORM2D::rhs(BoutReal time) {
+int STORM2D::rhs(BoutReal UNUSED(time)) {
 
   // Communicate variables
   mesh->communicate(comms);
@@ -397,7 +397,7 @@ const Field3D STORM2D::loss_n(const BoutReal &lambda, const Field3D &n, const Fi
 }
 
 
-const Field3D STORM2D::loss_vort(const BoutReal &lambda, const Field3D &vort, const Field3D &n, const Field3D &phi, const Field3D &T){
+const Field3D STORM2D::loss_vort(const BoutReal &lambda, const Field3D &vort, const Field3D &UNUSED(n), const Field3D &phi, const Field3D &T){
 // Parallel loss term for vorticity equation
 
   Field3D vort_loss ;
@@ -419,7 +419,7 @@ const Field3D STORM2D::loss_vort(const BoutReal &lambda, const Field3D &vort, co
 }
 
 
-const Field3D STORM2D::loss_T(const BoutReal &lambda, const Field3D &n, const Field3D &phi, const Field3D &T){
+const Field3D STORM2D::loss_T(const BoutReal &lambda, const Field3D &UNUSED(n), const Field3D &phi, const Field3D &T){
 // Parallel loss term for temperature equation
 
   Field3D T_loss ;
