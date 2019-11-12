@@ -53,7 +53,7 @@ private:
   // Variables and functions used for parallel loss terms
   BoutReal mu, V_float ;                // floating potential for the nonisothermal sheath loss terms
   BoutReal V_sheath_prefactor, U_sheath_prefactor ;
-  string SOL_closure ;                  // switch for 2d closure to use, either sheath_diss, vort_adv, or ESEL_like.
+  std::string SOL_closure ;                  // switch for 2d closure to use, either sheath_diss, vort_adv, or ESEL_like.
   bool sheath_linear ;                  // switch for linearised sheath conditions when using sheath dissipation closure
   BoutReal n_bg, T_bg, phi_bg ;                 // background value to which fluctuations decay, as a fraction of the normalisation values
   const Field3D V_sheath(const Field3D &phi, const Field3D &T) ;
