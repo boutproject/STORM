@@ -65,7 +65,7 @@ private:
 
   bool isothermal ;                     // switch for isothermal simulations
 
-  class Laplacian* phiSolver;           // Laplacian solver for vort -> phi
+  std::unique_ptr<Laplacian> phiSolver; // Laplacian solver for vort -> phi
 };
 
 int STORM2D::init(bool UNUSED(restarting)) {

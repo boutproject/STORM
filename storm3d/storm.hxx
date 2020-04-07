@@ -127,7 +127,7 @@ private:
   FILE *file;
   FieldGroup comms;
   BRACKET_METHOD bm;           // Bracket method for advection terms
-  Laplacian* phiSolver;        // Laplacian solver for vort -> phi
+  std::unique_ptr<Laplacian> phiSolver; // Laplacian solver for vort -> phi
 
   //////////////////////////////////////////////////////////////
   // Methods for boundary conditions
