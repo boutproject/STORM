@@ -3,7 +3,22 @@ nout                  = 20                  # Number of outputted timesteps
 
 MZ                    = 128                 # Number of Z points
 zmin                  = 0
-zmax                  = storm:Lz/2./pi      # z is fracs of 2pi
+zmax                  = 15.9155             # 1.5915*2pi = 10, z is fracs of 2pi
+
+[mesh:ddx]
+first                 = C2
+second                = C2
+upwind                = C2
+
+[mesh:ddy]
+first                 = C2
+second                = C2
+upwind                = U2
+
+[mesh:ddz]
+first                 = C2
+second                = C2
+upwind                = C2
 
 [mesh]
 StaggerGrids          = true                # Enables staggered grids
@@ -16,6 +31,15 @@ dy                    = Ly/ny
 
 ixseps1               = -1           # Set x location of separatrix 1
 ixseps2               = 0           # Set x location of separatrix 2
+
+[laplace] 
+global_flags           = 0 
+inner_boundary_flags  = 16
+outer_boundary_flags  = 16
+include_yguards       = false
+
+[solver]
+mxstep                = 100000000           # max steps before result is deemed not to converge
 
 [storm]
 B_0                   = 0.5                 # Tesla 
@@ -73,89 +97,17 @@ function              = 16.0*exp(-5.0*y/(2*pi))
 [n]
 function              = 1.0
 
-bndry_yup             = free_o3
-bndry_ydown           = neumann   #if symmetry_plane=true
-bndry_xin             = neumann
-bndry_xout            = neumann
-
 [T]
 function = 1.0
-
-bndry_yup             = free_o3
-bndry_ydown           = neumann   #if symmetry_plane=true
-bndry_xin             = neumann
-bndry_xout            = neumann
 
 [vort]
 function              = 0.0
 
-bndry_yup             = free_o3
-bndry_ydown           = neumann   #if symmetry_plane=true
-bndry_xin             = neumann
-bndry_xout            = neumann
-
 [U]
 function              = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
-
-bndry_xin             = neumann
-bndry_xout            = neumann
-bndry_yup             = none
-bndry_ydown           = dirichlet   #if symmetry_plane=true
 
 [V]
 function              = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
 
-bndry_xin             = neumann
-bndry_xout            = neumann
-bndry_yup             = none
-bndry_ydown           = dirichlet   #if symmetry_plane=true
-
-[qpar]
-bndry_xin             = none
-bndry_xout            = none
-bndry_yup             = none
-bndry_ydown           = dirichlet   #if symmetry_plane=true
-
 [phi]
 function              = (storm:phi_wall) + 3.18
-
-bndry_yup             = free_o3
-bndry_ydown           = neumann #if symmetry_plane=true
-bndry_xin             = none
-bndry_xout            = none
-
-[phi_stag]
-bndry_yup             = none
-bndry_ydown           = none
-bndry_xin             = free_o3
-bndry_xout            = free_o3
-
-[laplace]
-global_flags           = 0
-inner_boundary_flags  = 16
-outer_boundary_flags  = 16
-
-[solver]
-type                  = pvode
-mxstep                = 100000000           # max steps before result is deemed not to converge
-# atol                = 1.0e-12             # absolute tolerance
-# rtol                = 1.0e-5              # relative tolerance
-
-[mesh:ddx]
-first                 = C2
-second                = C2
-upwind                = C2
-
-[mesh:ddy]
-first                 = C2
-second                = C2
-upwind                = U2
-
-[mesh:ddz]
-first                 = C2
-second                = C2
-upwind                = C2
-
-[output]
-floats                = false               # Sets outputs to floats/doubles
-

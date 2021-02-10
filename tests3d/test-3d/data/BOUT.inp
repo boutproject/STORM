@@ -55,7 +55,7 @@ ixseps2               = 0           # Set x location of separatrix 2
 
 symmetricGlobalY      = true
 
-[laplace] 
+[phiSolver]
 type                  = cyclic
 global_flags           = 0 
 inner_boundary_flags  = 16
@@ -134,14 +134,6 @@ max_zmode             = 25
 amplitude_n           = 0.001
 amplitude_T           = 0.001
 
-# [All]
-# scale               = 0.0
-# xs_opt              = 3
-# zs_opt              = 3
-# bndry_yin           = dirichlet(10)
-# bndry_yout          = dirichlet(-10)
-evolve_bndry          = false
-
 [S]
 scale = 1.0
 # function    = 10*exp(10.0*y/(2*pi))/(exp(10.0)-1.0)                                                         # Sheath loc
@@ -161,81 +153,24 @@ function            = 16.0*exp(-5.0*y/(2*pi))
 scale = 1.0
 function              = 1.0
 
-bndry_yup             = free_o3 
-bndry_ydown           = neumann_o2   #if symmetry_plane=true
-# bndry_ydown           = free_o3         #if symmatry_plane=false
-bndry_xin             = neumann_o2
-bndry_xout            = neumann_o2
-
 [T]
 scale = 1.0
 function = 1.0
-bndry_yup             = free_o3
-bndry_ydown           = neumann_o2   #if symmetry_plane=true
-# bndry_ydown           = free_o3         #if symmatry_plane=false
-bndry_xin             = neumann_o2
-bndry_xout            = neumann_o2
 
 [vort]
 scale = 1.0
 function              = 0.0 
-
-bndry_yup             = free_o3 
-bndry_ydown           = neumann_o2   #if symmetry_plane=true
-# bndry_ydown           = free_o3         #if symmatry_plane=false
-bndry_xin             = neumann_o2
-bndry_xout            = neumann_o2
 
 [U]
 scale = 1.0
 function             = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
 # function              = exp(-10)*(exp( 10*((y-pi)/pi)) - exp( 10*((pi-y)/pi))) #if symmetry_plane=false
 
-bndry_xin             = neumann_o2
-bndry_xout            = neumann_o2
-bndry_yup             = none
-bndry_ydown           = dirichlet_o2
-
 [V]
 scale = 1.0
 function             = exp(-10)*exp( 10*(y/(2.0*pi))) #if symmetry_plane=true
 # function              = exp(-10)*(exp( 10*((y-pi)/pi)) - exp( 10*((pi-y)/pi))) #if symmetry_plane=false
 
-bndry_xin             = neumann_o2
-bndry_xout            = neumann_o2
-bndry_yup             = none 
-bndry_ydown           = dirichlet_o2
-
-[qpar]
-scale = 1.0
-function = 0.0
-
-bndry_xin             = neumann_o2
-bndry_xout            = neumann_o2
-bndry_yup             = none
-bndry_ydown           = dirichlet_o2   #if symmetry_plane=true
-# bndry_ydown           = none  #if symmetry_plane=false
-
 [phi]
 scale = 1.0
 function              = (storm:phi_wall) + 3.18
-
-bndry_yup             = free_o3 
-bndry_ydown           = neumann_o2 #if symmetry_plane=true
-# bndry_ydown           = free_o3  #if symmetry_plane=false
-bndry_xin             = none 
-bndry_xout            = none 
-
-[phi_stag]
-function              = 0.0
-
-bndry_yup             = none 
-bndry_ydown           = none 
-bndry_xin             = free_o3
-bndry_xout            = free_o3
-
-[uE2]
-bndry_xin = free_o3
-bndry_xout = free_o3
-bndry_yup = free_o3
-bndry_ydown = free_o3

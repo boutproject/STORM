@@ -23,8 +23,85 @@
 #include <bout_types.hxx>
 #include <derivs.hxx>
 
+const Field3D STORM::Grad_par_EM(const Field3D &var_aligned, const Field3D &var_outloc,
+    const Field3D &Psi, CELL_LOC outloc, const std::string& method) {
+  AUTO_TRACE();
+
+  ASSERT1(var_aligned.getDirectionY() == YDirectionType::Aligned);
+  ASSERT1(var_outloc.getDirectionY() == YDirectionType::Standard);
+  ASSERT1(Psi.getDirectionY() == YDirectionType::Standard);
+
+  Field3D result = fromFieldAligned(Grad_par(var_aligned, outloc, method), "RGN_NOBNDRY");
+
+  if (electromagnetic) {
+    ASSERT1(Psi.getLocation() == outloc and var_outloc.getLocation() == outloc);
+
+    result -= beta0/2 *bracket(Psi,var_outloc, bm, outloc);
+  }
+
+  return result;
+}
+
+const Field3D STORM::Div_par_EM(const Field3D &var_aligned, const Field3D &var_outloc,
+    const Field3D &Psi, CELL_LOC outloc, const std::string& method) {
+  AUTO_TRACE();
+
+  ASSERT1(var_aligned.getDirectionY() == YDirectionType::Aligned);
+
+  if (electromagnetic) {
+    ASSERT1(var_outloc.getDirectionY() == YDirectionType::Standard);
+    ASSERT1(Psi.getDirectionY() == YDirectionType::Standard);
+
+    auto coords_outloc = mesh->getCoordinates(outloc);
+    return coords_outloc->Bxy*Grad_par_EM(var_aligned/var_aligned.getCoordinates()->Bxy,
+        var_outloc/coords_outloc->Bxy, Psi, outloc, method);
+  } else {
+    return fromFieldAligned(Div_par(var_aligned, outloc, method), "RGN_NOBNDRY");
+  }
+}
+
+const Field3D STORM::Vpar_Grad_par_EM(const Field3D &v_aligned, const Field3D &f_aligned,
+    const Field3D &v_outloc, const Field3D &f, const Field3D &Psi, CELL_LOC outloc,
+    const std::string& method) {
+  AUTO_TRACE();
+
+  ASSERT1(v_aligned.getDirectionY() == YDirectionType::Aligned);
+  ASSERT1(f_aligned.getDirectionY() == YDirectionType::Aligned);
+  ASSERT1(v_outloc.getDirectionY() == YDirectionType::Standard);
+  ASSERT1(f.getDirectionY() == YDirectionType::Standard);
+  ASSERT1(Psi.getDirectionY() == YDirectionType::Standard);
+
+  Field3D result = fromFieldAligned(Vpar_Grad_par(v_aligned, f_aligned, outloc, method),
+                                    "RGN_NOBNDRY");
+
+  if (electromagnetic) {
+    ASSERT1(Psi.getLocation() == outloc and f.getLocation() == outloc);
+
+    result -= beta0/2. * v_outloc * bracket(Psi, f, bm, outloc);
+  }
+
+  return result;
+}
+
+const Field3D STORM::Grad_perp_dot_Grad_perp(const Field3D &f, const Field3D &g) {
+
+  AUTO_TRACE();
+
+  auto& coords = *f.getCoordinates();
+
+  auto ddx_f = DDX(f);
+  auto ddz_f = DDZ(f);
+  auto ddx_g = DDX(g);
+  auto ddz_g = DDZ(g);
+  return  coords.g11*ddx_f*ddx_g + coords.g33*ddz_f*ddz_g
+          + coords.g13*(ddx_f*ddz_g + ddz_f*ddx_g);
+}
+
 // Curvature operator
 const Field3D STORM::Curv(const Field3D &f){
-  ASSERT1(f.getLocation() == CELL_CENTRE); //otherwise g_33 should be interpolated (not yet implemented in BOUT++)
-  return g0*DDZ(f)/sqrt(mesh->getCoordinates()->g_33);
+  AUTO_TRACE();
+
+  ASSERT1(f.getDirectionY() == YDirectionType::Standard);
+
+  return g0*DDZ(f)/sqrt(f.getCoordinates()->g_33);
 }

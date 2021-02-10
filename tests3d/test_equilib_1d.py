@@ -26,12 +26,14 @@ from datetime import timedelta
 
 tests = ["test-equilib"]
 testcommand = "./runtest.py"
-retestOption = " --retest t"
+retestOption = " --retest"
 
-def test_equilib_1d(retest=False):
+def test_equilib_1d(retest=False, np=1):
     global tests,testcommand,retestOption
 
     start_time = time.monotonic()
+
+    testcommand = testcommand + " " + str(np)
 
     numTests = 0
     numFailures = 0
@@ -46,12 +48,12 @@ def test_equilib_1d(retest=False):
         os.chdir(testdir)
         s,out = shell(testcommand,pipe=False)
         numTests = numTests+1
-        if s is not 0:
+        if s != 0:
             numFailures = numFailures+1
             failedTests.append(testdir)
         print("")
 
-    if numFailures is 0:
+    if numFailures == 0:
         print("All tests passed")
     else:
         print(str(numFailures)+"/"+str(numTests)+" failed.")
@@ -69,11 +71,10 @@ if __name__=="__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    def str_to_bool(string):
-        return string=="True" or string=="true" or string=="T" or string=="t"
-    parser.add_argument("--retest",default=False)
+    parser.add_argument("--retest",action="store_true",default=False)
+    parser.add_argument("--nproc",default=1)
     args = parser.parse_args()
 
-    test_equilib_1d(args.retest)
+    test_equilib_1d(retest=args.retest, np=args.nproc)
 
     exit(0)

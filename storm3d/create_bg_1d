@@ -48,14 +48,14 @@ matlabfilename = "/background"
 restarting = False
 run_1d = True
 nc_save = True
-nproc = 4
 MPIRUN = getmpirun()
 
 # get command line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("datadir", nargs='?', default="data")
-args = parser.parse_args()
-datadir = args.datadir+"/"
+parser.add_argument("--nproc", type=int, default=4)
+input_args = parser.parse_args()
+datadir = input_args.datadir+"/"
 
 if run_1d:
     iterationlength = 100000
@@ -110,7 +110,6 @@ else:
             pass
 
 if run_1d:
-  nproc = 1
   Nx = 1
 
 if not os.path.exists(savepath):
@@ -119,7 +118,7 @@ if not os.path.exists(savepath):
 # shell("cp "+datadir+"BOUT.inp "+datadir+"BOUT.inp.tmp")
 shell("sed -i.bak '/grid =/d' "+datadir+"BOUT.inp")
 
-args = "-d "+datadir+" timestep=" + str(iterationlength) + " nout=1" + " MZ=1" + " storm:g0=0" + " storm:add_blob=false"
+args = "-d "+datadir+" timestep=" + str(iterationlength) + " nout=1" + " MZ=1" + " storm:g0=0" + " storm:add_blob=false" + " fast_output:enable=false" + " storm:electromagnetic=false"
 
 if gridfile:
     # mesh options will not be defined in BOUT.inp, need to pass them through here
@@ -128,7 +127,7 @@ if gridfile:
         args = args + " mesh:nx=" + str(Nx+2*mxg)
 
 if run_1d:
-    args = args + " mesh:nx=" + str(Nx+2*mxg) +  " storm:run_1d=true nxpe=1 phi_stag:bndry_xin=neumann phi_stag:bndry_xout=neumann"
+    args = args + " mesh:nx=" + str(Nx+2*mxg) +  " storm:run_1d=true nxpe=1 storm:equilibrium_source=input_file"
 else:
   args = args + " storm:nu_parallel0=1000.0"
   
@@ -139,12 +138,9 @@ i=0
 shell("echo Running iteration "+str(i))
 
 if(restarting == False):
-  # Run initial simulation with phi_bndry = 0 
-  # and without loading equilibrium profiles
-  first_iteration_args = args + " storm:equilibrium_source=input_file"
-  cmd = executable + first_iteration_args
-  print("Running first step with " + first_iteration_args, flush=True)
-  s, out = launch(cmd, runcmd=MPIRUN, nproc=nproc, pipe=True, output="create_bg_run.log")
+  cmd = executable + args
+  print("Running first step with " + args, flush=True)
+  s, out = launch(cmd, runcmd=MPIRUN, nproc=input_args.nproc, pipe=True, output="create_bg_run.log")
 
 phi = collect('phi', path=datadir, info=False, yguards=True)
 phi_error = 100*np.max(np.abs(phi[-1,(Nx+2*mxg)//2,:,0]))
@@ -166,7 +162,7 @@ cmd = executable + args
 while phi_error > tol:
   shell("echo Running iteration "+str(i))
   
-  s, out = launch(cmd, runcmd=MPIRUN, nproc=nproc, pipe=True)
+  s, out = launch(cmd, runcmd=MPIRUN, nproc=input_args.nproc, pipe=True)
   if s:
       raise ValueError("STORM returned with value " + str(s))
 

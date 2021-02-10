@@ -37,6 +37,10 @@ runOutputDir = "data"
 runOutput = os.path.join(runOutputDir,"BOUT.dmp.*")
 runExpectedOutput = os.path.join(runOutputDir,"expectedResults","BOUT.dmp.nc")
 executable = "../../storm3d/storm"
+# x-boundary cells are not set or used for these variables, so don't check them
+noXBoundaryVariables = ['qpar', 'chiU', 'chiV']
+# y-boundary cells are not set or used for these variables, so don't check them
+noYBoundaryVariables = ['uE2', 'chiU', 'chiV']
 
 def test(numProcs,retestOutput=False):
 
@@ -49,7 +53,7 @@ def test(numProcs,retestOutput=False):
 
     if not retestOutput:
         s = run_test(numProcs)
-        if s is not 0:
+        if s != 0:
             print("Error: simulation run failed")
             return 1,1
 
@@ -60,15 +64,7 @@ def test(numProcs,retestOutput=False):
 
     return numFailures,numTests
 
-def run_test(numProcs):
-    # Run the simulation
-
-    # Remove existing output files
-    for filename in glob.glob(runOutput):
-        os.remove(filename)
-
-    print("Running simulation on "+str(numProcs)+" processors")
-
+def generate_restarts(numProcs):
     # Read nxpe (number of processors in x direction) to pass to restart.redistribute, if present in BOUT.inp
     options = BoutOptionsFile(os.path.join(runOutputDir,"BOUT.inp"))
     try:
@@ -78,7 +74,18 @@ def run_test(numProcs):
 
     # prepare restart files
     restart.redistribute(numProcs,nxpe=nxpe,path=os.path.join(runOutputDir,"restart"),output=runOutputDir)
-    
+
+def run_test(numProcs):
+    # Run the simulation
+
+    # Remove existing output files
+    for filename in glob.glob(runOutput):
+        os.remove(filename)
+
+    print("Running simulation on "+str(numProcs)+" processors")
+
+    generate_restarts(numProcs)
+
     # run simulation
     print("running: "+executable)
     s,out = launch(executable,nproc=numProcs,output="test_run.log")
@@ -114,11 +121,14 @@ def check_test():
     # Test output
     for name in evolvingVariables:
         if len(run[name].shape) == 1:
-            # scalars are diagnostic outputs like wall-time, so not useful to test
+            # exclude 0d variables that only evolve in time
             continue
-        # exclude second x guard cells as they are not used and may not always be set consistently
-        data = testfield_slice(run[name], m_guards)
-        expectedData = testfield_slice(runExpected.read(name), m_guards_expected)
+        # exclude guard cells if boundary conditions are not set for a certain variable
+        # always exclude second x guard cells as they are not used and may not always be set consistently
+        includeXBoundary = name not in noXBoundaryVariables
+        includeYBoundary = name not in noYBoundaryVariables
+        data = testfield_slice(run[name], m_guards, includeXBoundary, includeYBoundary)
+        expectedData = testfield_slice(runExpected.read(name), m_guards_expected, includeXBoundary, includeYBoundary)
         diff_max,norm_max = testfield_max(data,expectedData)
         numTests = numTests+1
         if diff_max/norm_max>tolerance and diff_max>abs_tolerance:
@@ -133,20 +143,30 @@ def check_test():
 
     return numFailures,numTests
 
-def testfield_slice(data, m_guards):
+def testfield_slice(data, m_guards, includeXBoundary, includeYBoundary):
     # Restrict data to valid, consistently set indices
 
     # Zero corner guard cells
+    ftype = data.attributes['bout_type']
     mxg, myg = m_guards
-    data[:,:mxg,:myg,:] = 0.
-    data[:,:mxg,-myg:,:] = 0.
-    data[:,-mxg:,:myg,:] = 0.
-    data[:,-mxg:,-myg:,:] = 0.
+    if ftype == 'Field3D_t' or ftype == 'Field2D_t':
+        data[:,:mxg,:myg] = 0.
+        data[:,:mxg,-myg:] = 0.
+        data[:,-mxg:,:myg] = 0.
+        data[:,-mxg:,-myg:] = 0.
 
-    # Only test first x-guard cells
-    # (because phi only has the first guard cells set)
-    xstart = mxg-1 if mxg-1>0 else None
-    data = data[:,xstart:-xstart,:,:]
+    if includeXBoundary:
+        # Only test first x-guard cells
+        # (because phi only has the first guard cells set)
+        xstart = mxg-1 if mxg-1>0 else None
+        data = data[:,xstart:-xstart,:]
+    else:
+        xstart = mxg if mxg>0 else None
+        data = data[:,xstart:-xstart,:]
+
+    if not includeYBoundary and (ftype == 'Field3D_t' or ftype == 'Field2D_t'):
+        ystart = myg if myg>0 else None
+        data = data[:,:,ystart:-ystart]
 
     return data
 
@@ -171,11 +191,14 @@ if __name__=="__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    def str_to_bool(string):
-        return string=="True" or string=="true" or string=="T" or string=="t"
     parser.add_argument("np",type=int)
-    parser.add_argument("--retest",default=False)
+    parser.add_argument("--retest",action="store_true",default=False)
+    parser.add_argument("--gen_restart",action="store_true",default=False)
     args = parser.parse_args()
+
+    if args.gen_restart:
+        generate_restarts(args.np)
+        exit(0)
 
     numFailures,numTests = test(args.np,retestOutput=args.retest)
     exit(numFailures)
