@@ -61,3 +61,7 @@ https://doi.org/10.1088/0741-3335/58/11/115010
 
 [4] F. Militello, B. Dudson, L. Easy, A. Kirk and P. Naylor, Plasma Physics and
 Controlled Fusion 59, 125013 (2017), https://doi.org/10.1088/1361-6587/aa9252
+
+[5] D. Hoare, F. Militello, J.T. Omotani, F. Riva, S. Newton, T. Nicholas, D.
+Ryan and N.R. Walkden, Plasma Physics and Controlled Fusion 61, 105013 (2019),
+https://doi.org/10.1088/1361-6587/ab34f8

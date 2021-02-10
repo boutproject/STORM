@@ -59,7 +59,8 @@ BOUT.settings
 *.bmp
 *.pdf
 
-*filaments
+storm3d/storm
+*/make.config
 data_*
 *.txt
 storm2d/storm2d

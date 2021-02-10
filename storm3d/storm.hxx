@@ -23,22 +23,44 @@
 #define __FILAMENTS_H__
 
 #include <bout/physicsmodel.hxx>
+#include <interpolation.hxx>
 #include <invert_laplace.hxx>
 #include <bout_types.hxx>
+#include "../shared/fast_output.hxx"
 
 class STORM : public PhysicsModel{
 public:
-  virtual ~STORM() {}
+  ~STORM() {}
 protected:
   int init(bool restarting);
   int rhs(BoutReal t);
+  int timestepMonitor(BoutReal simtime, BoutReal UNUSED(dt)) {
+    int ret = 0;
+    if(evolving_bcs) compute_bndry_phi(simtime);
+    if(fast_output.enable_timestep) {
+      ret = fast_output.monitor_method(simtime);
+      if (ret) return ret; // return immediately if ret is non-zero (indicating error)
+    }
+    return ret;
+  }
+  int outputMonitor(BoutReal simtime, int iteration, int nout);
 private:
 
   Options* globalOptions;
   Options* options;
+  Coordinates* coordinates_centre;
 
-  void initialise_background(bool restarting);
-  void initialise_blob(const char * imp_section);
+  //////////////////////////////////////////////////////////////
+  // Initialisation methods
+  //////////////////////////////////////////////////////////////
+  void initialise_background();
+  void initialise_blob(const char * imp_section) ; 
+  void add_noise() ;
+  void add_perturbation(Field3D &f, const std::string name);
+  void setBoundaryConditionsOptions();
+  void check_U_V_x_boundary_conditions();
+
+  void phisolver_1d() ; 
   FieldPerp extrap_sheath_lower(const Field3D &var);
   FieldPerp extrap_sheath_upper(const Field3D &var);
   void set_equilibrium_value(Field3D & f,const char * fname);
@@ -52,22 +74,36 @@ private:
 
   void read_equilibrium_file(BoutReal * data, const char * fname);
 
+  Field3D logn;
   Field3D n;                   // density
   Field3D U;                   // ion parallel velocity
   Field3D V;                   // electron parallel velocity
   Field3D vort;                // vorticity
   Field3D phi;                 // electrostatic potential
   Field3D S;                   // density source
+  Field3D logT; 
   Field3D T;                   // electron temperature
-  Field3D qpar;                // parallel heat flux
+  Field3D qpar_aligned;        // parallel heat flux
+  Field3D uE2;                 // square of the absolute value of the perpendicular gradient of phi (used when Boussinesq is NOT used)
   Field3D S_E;                 // energy source
 
+  Field3D psi;                 // parallel component of the magnetic vector potential
+  Field3D chiU;                // U+beta/2*psi
+  Field3D chiV;                // V-mu*beta/2*psi
+
   FieldPerp phi_sheath_lower, phi_sheath_upper, n_sheath_lower, n_sheath_upper, T_sheath_lower, T_sheath_upper;
-  FieldPerp V_sheath_lower, V_sheath_upper, U_sheath_upper, U_sheath_lower;
+  FieldPerp psi_sheath_lower, psi_sheath_upper;
+  FieldPerp V_sheath_lower, V_sheath_upper, U_sheath_upper, U_sheath_lower ;
   Field3D nu_parallel, mu_n, mu_vort,kappa_perp;
-  Field3D n_stag;
+  Field3D logn_stag;
+  Field3D n_stag ;
+  Field3D U_centre;
   Field3D V_centre;
+  Field3D logT_stag;
   Field3D T_stag;
+  Field3D logn_aligned, logT_aligned;
+  Field3D n_aligned, U_aligned, V_aligned, vort_aligned, phi_aligned, T_aligned, psi_aligned;
+  Field3D qpar_centre;
   Field3D Tcoef;
   Field3D phi_stag;
   Field3D S_stag;
@@ -75,6 +111,7 @@ private:
   Field3D p; //p=n*T
   Field3D UmV; //UmV = U-V
   Field3D UmV_centre;
+  Field3D psi_centre;
 
   Field3D Curv_n;   // Curv(n)
   Field3D Curv_T;   // Curv(T)
@@ -82,87 +119,169 @@ private:
   Field3D Curv_phi; // Curv(phi)
 
   // Fields and arrays used to initialise save background
+  //BoutReal *n_array, *phi_array, *U_array, *V_array ; 
   BoutReal *data, *phi_array_inner, *phi_array_outer;
   Field3D n_eq, U_eq, V_eq, phi_eq, T_eq, q_eq ;
   std::string equilibrium_source;    // specifies which method to use to read in or initialise initial profiles
   std::string equilibrium_file_path; // path to the directory where equilibrium files are stored
   std::string equilibrium_data_file; // netcdf or hdf5 file with initial profiles.
-                                     // If equilibrium_data_file is an empty string (the
-                                     // default value) then read 1d initial profiles from
-                                     // .dat binary files
+                                // If equilibrium_data_file is an empty string (the default value)
+                                // then read 1d initial profiles from .dat binary files
 
-  BoutReal mu_n0;        // density diffusion coefficient
-  BoutReal mu_vort0;     // ion viscosity
-  BoutReal mu;           // m_i/m_e
-  BoutReal nu_parallel0; // electron-ion friction
-  BoutReal g0;
-  BoutReal kappa0;       // parallel heat conduction
-  BoutReal kappa0_perp;
-  BoutReal phi_wall;     // potential of target walls.
+  // Fields used for mms:
+  Field3D V_M, phi_stag_M, n_M, phi_M , S_NR, phiS, phi_xlow ;               
+  FieldPerp S_NR_sheath_lower, phi_sheath_M_lower, V_sheath_M_lower, S_NR_sheath_upper, phi_sheath_M_upper, V_sheath_M_upper ;
 
-  Field3D n_on_sqrt_T;   // working field for nonuniform diss params
-  Field3D Grad_par_phi, Grad_par_T;
-  Field3D powT_1_5_stag; // pow(T_stag,1.5)
+  BoutReal mu_n0 ;              // density diffusion coefficient
+  BoutReal mu_vort0 ;           // ion viscosity
+  BoutReal mu ;                 // m_i/m_e
+  BoutReal nu_parallel0 ;       // electron-ion friction
+  BoutReal g0 ; 
+  BoutReal kappa0 ;	            // parallel heat conduction
+  BoutReal kappa0_perp ;        
+  BoutReal diff_perp_U;
+  BoutReal diff_perp_V;
+  BoutReal phi_wall ;           // potential of target walls. 
+  BoutReal beta0 ;              // ratio of plasma to magnetic pressure (with normalization parameters)
 
-  // Parameters used to set normalisations correctly.
-  BoutReal u, e, m_e, epsilon_0, mu_0;
-  BoutReal B_0, T_e0, T_i0, n_0, m_i, q, R_c;
-  BoutReal Omega_i, Omega_e, c_s, rho_s;
-  BoutReal nu_ei, nu_ii;
-  BoutReal rho_e, rho_i;
-  BoutReal V_the, V_thi;
-  BoutReal loglambda;
-  BoutReal Vsheath_BC_prefactor, Usheath_BC_prefactor;
+  Field3D n_on_sqrt_T ;         // working field for nonuniform diss params
+  Field3D Grad_par_phi_stag, Grad_par_T_stag;
+  Field3D powT_1_5_stag;        // pow(T_stag,1.5)
+
+  // Parameters used to set normalisations correctly.  
+  BoutReal u, e, m_e, epsilon_0, mu_0, Z ;               
+  BoutReal B_0, T_e0, T_i0, n_0, m_i, q, R_c ; 
+  BoutReal Omega_i, Omega_e, c_s, rho_s ; 
+  BoutReal nu_ei, nu_ii ; 
+  BoutReal rho_e, rho_i ; 
+  BoutReal V_the, V_thi ; 
+  BoutReal loglambda ; 
+  BoutReal Vsheath_BC_prefactor, Usheath_BC_prefactor ;
   BoutReal Lx, Ly, Lz;
 
-  bool isothermal;             // Switch for isothermal simulations
-  bool uniform_diss_paras;     // Switch for global/local values of mu_vort, mu_n
+  int ixseps1 ; 
+  int ixseps2 ;
+  int jyseps1_1, jyseps2_1, jyseps1_2, jyseps2_2, ny_inner;
+
+  bool isothermal ;            // Switch for isothermal simulations
+  bool boussinesq ;            // Switch for the Boussinesq approximation
+  bool electromagnetic;        // Switch for evolution of parallel magnetic vector potential, 'electromagnetic effects'
+  bool uniform_diss_paras ;    // Switch for global/local values of mu_vort, mu_n
+  bool old_phi_wall_value ;    // Switch for setting phi_wall = 0.5*ln(mu/TWOPI) 
+  bool curv_n_ExB ;            // Switch for -n*dphi/dz term
+  bool curv_n_dia ;            // Switch for dn/dz term
+  bool curv_vort_local ;       // Switch for removal of n dependence in the curvature term of the vorticity equation
+  bool curv_T_dia ;	     // Switch for diamagnetic parts of Te equation
+  bool curv_T_ExB ;	     // Switch for ExB compression term in Te equation
+  bool curv_T_gyro ;	     // Switch for gyro-viscous term in Te equation
   bool run_1d;                 // Run in 1d (parallel only) with phi=ln(n)+const.
+  bool hydrodynamic;           // Run with vort=0 and Jpar=n*(U-V)=0. Solve for phi from parallel Ohm's law with no inertia or resistivity
   BoutReal run_1d_T_slowdown;  // When running in 1d, decrease ddt(T) by this factor to allow longer timesteps
   bool symmetry_plane;         // Switch for running in a half-domain, assuming reflection symmetry about the midpoint of the parallel direction
-  bool add_blob;               // Switch to add a blob onto the equilibrium
-  bool verbose;                // Add extra output
+  bool normalise_lengths ;     // Switch to renormalise lengths
+  bool add_blob ;              // Switch to add a blob onto the equilibrium
+  bool two_blobs ;             // Adds a second blob specified in the section "blob_1" of BOUT.inp
+  bool initial_noise ;         // Switch to add random field onto the equilibrium
+  bool initial_perturbation ;  // Switch to add perturbations specified in input file onto the equilibrium
+  bool verbose ;	       // Add extra output
+  bool evolving_bcs;           // Switch to activate averaged Neumann boundary conditions for phi
+  bool use_psi_boundary_solver;// Use a Laplace solver to invert for psi on the boundary points, rather than extrapolating
+  bool save_aligned_fields;    // Switch to save field-aligned versions of fields to dump files
+  bool average_radial_boundaries_core_SOL; // Ad hoc boundary conditions in radial direction
 
-  // BoutReal *phi_x_boundary;
-  FILE *file;
-  FieldGroup comms;
+  // BoutReal *phi_x_boundary ; 
+  FILE *file ; 
+  FieldGroup comms ;
   BRACKET_METHOD bm;           // Bracket method for advection terms
-  Laplacian* phiSolver;        // Laplacian solver for vort -> phi
+  Laplacian* phiSolver;  // Laplacian solver for vort -> phi
+  Laplacian* psiSolver;  // Laplacian solver for {chiU,chiV} -> psi
+  Laplacian* psiBoundarySolver;  // Laplacian solver for n*(U-V) -> psi at y-boundaries, used if use_psi_boundary_solver==true
 
   //////////////////////////////////////////////////////////////
   // Methods for boundary conditions
   //////////////////////////////////////////////////////////////
   // Electron Velocity Sheath
-  void Vsheath_yup_staggered(Field3D &var, const FieldPerp &phisheath, const BoutReal phi_wall, const FieldPerp &T_sheath, const BoutReal Vsheath_BC_prefactor);
-  void Vsheath_ydown_staggered(Field3D &var, const FieldPerp &phisheath, const BoutReal phi_wall, const FieldPerp &T_sheath, const BoutReal Vsheath_BC_prefactor);
+  void Vsheath_yup_staggered(Field3D &var, const FieldPerp &phisheath, const BoutReal phi_wall, const FieldPerp &T_sheath, const BoutReal Vsheath_BC_prefactor) ;
+  void Vsheath_ydown_staggered(Field3D &var, const FieldPerp &phisheath, const BoutReal phi_wall, const FieldPerp &T_sheath, const BoutReal Vsheath_BC_prefactor) ;
 
   // Ion Velocity Sheath
   void Usheath_yup_staggered(Field3D &U, const FieldPerp &sqrtT, const BoutReal Usheath_BC_prefactor);
   void Usheath_ydown_staggered(Field3D &U, const FieldPerp &sqrtT, const BoutReal Usheath_BC_prefactor);
 
   //Parallel heat flux
-  void qsheath_yup_staggered(Field3D &var, const FieldPerp &T_sheath, const FieldPerp &n_sheath, const FieldPerp &U_sheath, const FieldPerp &V_sheath, const BoutReal mu);
-  void qsheath_ydown_staggered(Field3D &var, const FieldPerp &T_sheath, const FieldPerp &n_sheath, const FieldPerp &U_sheath, const FieldPerp &V_sheath, const BoutReal mu);
+  void qsheath_yup_staggered(Field3D &var, const FieldPerp &T_sheath, const FieldPerp &n_sheath, const FieldPerp &V_sheath, const BoutReal mu) ; 
+  void qsheath_ydown_staggered(Field3D &var, const FieldPerp &T_sheath, const FieldPerp &n_sheath, const FieldPerp &V_sheath, const BoutReal mu) ; 
 
   // Sets x guard cells to values from an array/another field's guard points.  Used for phi perpendicular boundary condition
-  void set_xguards(Field3D &f, const BoutReal *g_inner, const BoutReal *g_outer);
+  void set_xguards(Field3D &f, const BoutReal *g_inner, const BoutReal *g_outer) ;
+  void set_xguards(Field3D &f, const Field3D &g) ; 
+
+  // Apply the boundary conditions on psi
+  void applyPsiBoundaries();
+
+  // Variables and functions used for averaged Neumann boundary conditions
+  void phi_bc_initialise(bool restarting);
+  void compute_bndry_phi(const BoutReal time);
+  void apply_bndry_phi();
+  BoutReal time_last_SOL, time_last_PF, time_last_core;
+  BoutReal cstep_SOL, cstep_PF, cstep_core;
+  BoutReal time_update_SOL, time_update_PF, time_update_core;
+  Field2D phi_bc;
+  bool first_step;
+
+  // Apply neumann boundary condition on the DC (Z) and <->_YZ component
+  void average_Z_bndry(Field3D& f, const bool left = true, const bool right = true, const bool periodic = false);
+  void average_YZ_bndry(Field3D& f, const bool left = true, const bool right = true, const bool periodic = false);
+
+  //////////////////////////////////////////////////////////////
+  // Object to handle fast output
+  //////////////////////////////////////////////////////////////
+  FastOutput fast_output;
 
   //////////////////////////////////////////////////////////////
   // STORM operators
   //////////////////////////////////////////////////////////////
   const Field3D Curv(const Field3D &f);
+  const Field3D Grad_par_EM(const Field3D &var_aligned, const Field3D &var_outloc,
+      const Field3D &Psi, CELL_LOC outloc=CELL_DEFAULT,
+      const std::string& method="DEFAULT");
+  const Field3D Div_par_EM(const Field3D &var_aligned, const Field3D &var_outloc,
+      const Field3D &Psi, CELL_LOC outloc=CELL_DEFAULT,
+      const std::string& method="DEFAULT");
+  const Field3D Vpar_Grad_par_EM(const Field3D& v_aligned, const Field3D& f_aligned,
+      const Field3D& v_outloc, const Field3D& f, const Field3D& Psi,
+      CELL_LOC outloc=CELL_DEFAULT, const std::string& method="DEFAULT");
+
+  // Grad_perp_dot_Grad_perp implemented without any y-derivatives (eventually
+  // including y-derivatives should be optionally included). Avoids
+  // intermediate Vector3Ds so is slightly more efficient than
+  // Grad_perp(f)*Grad_perp(g) even ignoring the cost of y-derivatives.
+  const Field3D Grad_perp_dot_Grad_perp(const Field3D& f, const Field3D& g);
+
+  // Wrapper for interp_to that returns the result in non-field-aligned form
+  const Field3D stormInterp_to(const Field3D& f, CELL_LOC outloc) {
+    return fromFieldAligned(interp_to(f, outloc, "RGN_NOBNDRY"), "RGN_NOBNDRY");
+  }
 
   //////////////////////////////////////////////////////////////
   // Utility methods
   //////////////////////////////////////////////////////////////
-
-  void phisolver_1d();
 
   // Try to get Lx, Ly and Lz from the options. If they are not present, then
   // calculate from dx/dy/dz and metric, checking that all quantities used are
   // constant in order to avoid getting different answers on different
   // processors
   void set_Lx_Ly_Lz();
+  Field3D vort_from_phi(const Field3D phi);
+
+  // These two operators can be used to calculate the exact inverse of the
+  // multigrid Laplacian operator. Their implementation is copied from BOUT++,
+  // tests/integrated/test-multigrid-laplace/test_multigrid_laplace.cxx
+  Field3D this_Grad_perp2(const Field3D &f);
+  Field3D this_Grad_perp_dot_Grad_perp(const Field3D &f, const Field3D &g);
+
+  // Method to set the ddt guard cells of a variable to 0 when on staggered grid
+  void set_lower_ddt_zero(Field3D &var);
 };
 
 #endif // __ FILAMENTS_H__

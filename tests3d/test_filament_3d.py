@@ -23,10 +23,17 @@ from boututils.run_wrapper import shell
 import os
 import time
 from datetime import timedelta
+from collections import namedtuple
 
-tests = ["test-3d"]
+Test = namedtuple('test', ['name', 'runtime'])
+def Duration(minutes, seconds):
+    return timedelta(minutes=minutes, seconds=seconds)
+
+tests = [Test("test-3d", Duration(3, 43))]
+
 testcommand = "./runtest.py"
-retestOption = " --retest t"
+retestOption = " --retest"
+time_tolerance = timedelta(seconds=4.)
 
 def test_filament_3d(numProcs,retest=False):
     global tests,testcommand,retestOption
@@ -42,23 +49,44 @@ def test_filament_3d(numProcs,retest=False):
         print("Rechecking results - NOT running test examples")
         testcommand = testcommand+retestOption
 
-    for testdir in tests:
+    warnings = []
+    for test in tests:
+        testdir = test.name
         os.chdir(currentDir)
         os.chdir(testdir)
+
+        test_start = time.monotonic()
         s,out = shell(testcommand,pipe=False)
+        test_time = timedelta(seconds=time.monotonic() - test_start)
+
         numTests = numTests+1
-        if s is not 0:
+        if s != 0:
             numFailures = numFailures+1
             failedTests.append(testdir)
-        print("")
 
-    if numFailures is 0:
+        this_warning = None
+        if test_time - test.runtime > time_tolerance:
+            this_warning = testdir + ' took '+str(test_time)+'. This is longer than the expected '+str(test.runtime)+'.'
+        elif test.runtime - test_time  > time_tolerance:
+            this_warning = testdir + ' took '+str(test_time)+'. This is faster than the expected '+str(test.runtime)+'.'
+        if this_warning is not None:
+            print(this_warning, flush=True)
+            warnings.append(this_warning)
+
+        print("", flush=True)
+
+    if numFailures == 0:
         print("All "+str(numTests)+" tests passed")
     else:
         print(str(numFailures)+"/"+str(numTests)+" failed.")
         print("Failed tests:")
         for name in failedTests:
             print("    "+name)
+
+    if warnings:
+        for warning in warnings:
+            print(warning)
+        print('Expected times are from running on 1 node (48 cores) on the A3 (SKL) partition of Marconi, with optimized configuration of BOUT++. If a test is slower for the same case, check for performance regression. If it is faster, the expected time may need updating to account for improved performance.')
 
     end_time = time.monotonic()
     print ("Tests took "+str(timedelta(seconds=end_time-start_time)))
@@ -70,10 +98,8 @@ if __name__=="__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    def str_to_bool(string):
-        return string=="True" or string=="true" or string=="T" or string=="t"
     parser.add_argument("np",type=int)
-    parser.add_argument("--retest",default=False)
+    parser.add_argument("--retest",action="store_true",default=False)
     args = parser.parse_args()
 
     test_filament_3d(args.np,args.retest)

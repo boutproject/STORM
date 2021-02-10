@@ -33,13 +33,14 @@ testname = os.path.basename(os.getcwd())
 equilibDir = "data/equilibrium/"
 expectedEquilibDir = "data/expected_equilib"
 testFiles = ["n_eq.dat","phi_eq.dat","U_eq.dat","V_eq.dat"]
+ylowFiles = ["U_eq.dat", "V_eq.dat"]
 optionalTestFiles = ["T_eq.dat"]
 equilibFiles = [os.path.join(equilibDir,f) for f in testFiles+["background.mat","equilibrium.nc"] ]
 outputDir = "data/"
 outputFiles = [x for f in ["BOUT.dmp.*","BOUT.restart.*","BOUT.log.*"] for x in glob.glob(os.path.join(outputDir,f)) ]
 createbgscript = "../../storm3d/create_bg_1d"
 
-def test(retestOutput=False):
+def test(retestOutput=False,nproc=1):
 
     start_time = time.monotonic()
 
@@ -49,7 +50,7 @@ def test(retestOutput=False):
     print("***************************************")
 
     if not retestOutput:
-        run_test()
+        run_test(nproc=nproc)
 
     numFailures,numTests = check_test()
 
@@ -58,7 +59,7 @@ def test(retestOutput=False):
 
     return numFailures,numTests
 
-def run_test():
+def run_test(nproc=1):
 
     print("Running simulation")
 
@@ -66,8 +67,8 @@ def run_test():
     for filename in equilibFiles + outputFiles:
         if os.path.isfile(filename):
             os.remove(filename)
-    s,out = shell(createbgscript+" > createbg.log")
-    if s is not 0:
+    s,out = shell(createbgscript+" --nproc "+str(nproc)+" > createbg.log")
+    if s != 0:
         raise ValueError("Failed to run "+createbgscript)
 
 def check_test():
@@ -85,7 +86,7 @@ def check_test():
     for filename in testFiles:
         data = numpy.fromfile(os.path.join(equilibDir,filename))
         expectedData = numpy.fromfile(os.path.join(expectedEquilibDir,filename))
-        diff,norm = testfield(data,expectedData)
+        diff,norm = testfield(data, expectedData, filename in ylowFiles)
         numTests = numTests+1
         if diff/norm>tolerance and diff>abs_tolerance:
             numFailures = numFailures+1
@@ -97,11 +98,17 @@ def check_test():
 
     return numFailures,numTests
 
-def testfield(data,expectedData):
-    norm = numpy.sqrt(expectedData**2).mean()
+def testfield(data, expectedData, ylow):
+    # don't check y-boundary cells as these are not set for non-aligned fields
+    if not ylow:
+        indices = numpy.index_exp[2:-2]
+    else:
+        indices = numpy.index_exp[3:-2]
+
+    norm = numpy.sqrt(expectedData[indices]**2).mean()
     if norm==0.:
         norm==1.
-    diff = numpy.sqrt(((data-expectedData)**2).max())
+    diff = numpy.sqrt(((data[indices] - expectedData[indices])**2).max())
     return diff,norm
 
 if __name__=="__main__":
@@ -111,10 +118,9 @@ if __name__=="__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    def str_to_bool(string):
-        return string=="True" or string=="true" or string=="T" or string=="t"
-    parser.add_argument("--retest",default=False)
+    parser.add_argument("np",nargs='?',type=int,default=1)
+    parser.add_argument("--retest",action="store_true",default=False)
     args = parser.parse_args()
 
-    numFailures,numTests = test(retestOutput=args.retest)
+    numFailures,numTests = test(retestOutput=args.retest,nproc=args.np)
     exit(numFailures)

@@ -29,7 +29,10 @@
 
 ////////////////////////////////////////////////////////////////////////
 
-void STORM::initialise_background(bool restarting){
+void STORM::initialise_background() {
+
+  // Always load values, even if restarting, so *_eq fields get set.
+  // When restarting, restart values are loaded into fields after init() is done.
 
   if (equilibrium_source == "1d_profiles") {
     if (mesh->firstX()) {
@@ -39,17 +42,16 @@ void STORM::initialise_background(bool restarting){
       set_equilibrium_value_1d_array(phi_array_outer, "phi_eq.dat");
     }
     
-    if (!restarting) {
-      set_equilibrium_value(n  ,"n_eq.dat");
-      set_equilibrium_value(U  ,"U_eq.dat");
-      set_equilibrium_value(V  ,"V_eq.dat");
-      set_equilibrium_value(phi,"phi_eq.dat");
+    set_equilibrium_value(n  ,"n_eq.dat");
+    set_equilibrium_value(U  ,"U_eq.dat");
+    set_equilibrium_value(V  ,"V_eq.dat");
+    set_equilibrium_value(phi,"phi_eq.dat");
 
-      vort = 0.0 ;
+    vort = 0.0 ;
+    if (electromagnetic) psi = 0.;
 
-      if (!isothermal) {
-        set_equilibrium_value(T,"T_eq.dat");
-      }
+    if (!isothermal) {
+      set_equilibrium_value(T,"T_eq.dat");
     }
   }
   else if (equilibrium_source == "profiles_file") {
@@ -59,14 +61,15 @@ void STORM::initialise_background(bool restarting){
     equilib_profiles.get(mesh, phi, "phi");
     set_equilibrium_value_1d_array(phi_array_inner, phi_array_outer, phi);
 
-    if (!restarting) {
-      equilib_profiles.get(mesh, n, "n");
-      equilib_profiles.get(mesh, U, "U");
-      equilib_profiles.get(mesh, V, "V");
-      equilib_profiles.get(mesh, vort, "vort");
-      if (!isothermal) {
-        equilib_profiles.get(mesh, T, "T");
-      }
+    equilib_profiles.get(mesh, n, "n");
+    equilib_profiles.get(mesh, U, "U");
+    equilib_profiles.get(mesh, V, "V");
+    equilib_profiles.get(mesh, vort, "vort");
+    if (!isothermal) {
+      equilib_profiles.get(mesh, T, "T");
+    }
+    if (electromagnetic) {
+      equilib_profiles.get(mesh, psi, "psi");
     }
   }
   else if (equilibrium_source == "input_file") {
@@ -75,7 +78,14 @@ void STORM::initialise_background(bool restarting){
     if(mesh->get(phi,"phi")) { // Try to read from grid file
       initial_profile("phi",phi); // Get initial profile from options in input file
     }
+    // U and V are auxiliary variables in EM version, need to initialize explicitly
+    initial_profile("U", U);
+    initial_profile("V", V);
     set_equilibrium_value_1d_array(phi_array_inner, phi_array_outer, phi);
+
+    if (electromagnetic) {
+      initial_profile("psi", psi);
+    }
   }
   else {
     throw BoutException("Unrecognized equilibrium_source option '%s'", equilibrium_source.c_str());
@@ -85,10 +95,10 @@ void STORM::initialise_background(bool restarting){
   U_eq = U ;
   V_eq = V ;
   phi_eq = phi ;
-  SAVE_ONCE(n_eq) ; 
-  SAVE_ONCE(U_eq) ; 
-  SAVE_ONCE(V_eq) ; 
-  SAVE_ONCE(phi_eq) ; 
+  SAVE_ONCE(phi_eq);
+  SAVE_ONCE(n_eq);
+  SAVE_ONCE(U_eq);
+  SAVE_ONCE(V_eq);
   
   if(!isothermal){
     T_eq = T;
@@ -104,11 +114,15 @@ void STORM::initialise_background(bool restarting){
 void STORM::set_equilibrium_value(Field3D & f, const char * fname){
   data = new BoutReal[mesh->GlobalNy];
   read_equilibrium_file(data,fname);
+
+  f.allocate();
   for(int i=0; i<mesh->LocalNx; i++){
-    for(int j=0;j<mesh->LocalNy;j++){
-      int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
-      for(int k=0;k<mesh->LocalNz;k++){
-        f(i,j,k) = data[jglobal];
+    if(mesh->getGlobalXIndex(i)>=ixseps1){
+      for(int j=0;j<mesh->LocalNy;j++){
+        int jglobal = mesh->getGlobalYIndex(j);
+        for(int k=0;k<mesh->LocalNz;k++){
+          f(i,j,k) = data[jglobal];
+        }
       }
     }
   }
@@ -126,14 +140,18 @@ void STORM::set_equilibrium_value_1d_array(BoutReal* &f_inner, BoutReal* &f_oute
   if (mesh->firstX()) {
     // if f_inner has already been set, then do nothing here
     if (f_inner == nullptr) {
-      f_inner = new BoutReal[mesh->GlobalNy];
+      // Add second set of guard cells to mesh->GlobalNy in case this is used in a
+      // double-null simulation. This can be removed when BOUT++ v5 is released, because
+      // then GlobalNy will redefined to include all boundary cells; then it will always
+      // be true that mesh->getGlobalYIndex(mesh->LocalNy) <= mesh->GlobalNy.
+      f_inner = new BoutReal[mesh->GlobalNy + 2*mesh->ystart];
 #if CHECK>2
       for (int i = 0; i < mesh->GlobalNy; i++) {
         f_inner[i] = nan("");
       }
 #endif
       for(int j = 0; j < mesh->LocalNy; j++){
-        int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
+        int jglobal = mesh->getGlobalYIndex(j);
         f_inner[jglobal] = 0.5*(f3d(mesh->xstart-1, j, 0) + f3d(mesh->xstart, j, 0)) ;
       }
     }
@@ -142,14 +160,18 @@ void STORM::set_equilibrium_value_1d_array(BoutReal* &f_inner, BoutReal* &f_oute
   if (mesh->lastX()) {
     // if f_outer has already been set, then do nothing here
     if (f_outer == nullptr) {
-      f_outer = new BoutReal[mesh->GlobalNy];
+      // Add second set of guard cells to mesh->GlobalNy in case this is used in a
+      // double-null simulation. This can be removed when BOUT++ v5 is released, because
+      // then GlobalNy will redefined to include all boundary cells; then it will always
+      // be true that mesh->getGlobalYIndex(mesh->LocalNy) <= mesh->GlobalNy.
+      f_outer = new BoutReal[mesh->GlobalNy + 2*mesh->ystart];
 #if CHECK>2
       for (int i = 0; i < mesh->GlobalNy; i++) {
         f_outer[i] = nan("");
       }
 #endif
       for(int j = 0; j < mesh->LocalNy; j++){
-        int jglobal = mesh->getGlobalYIndexNoBoundaries(j) + mesh->ystart;
+        int jglobal = mesh->getGlobalYIndex(j);
         f_outer[jglobal] = 0.5*(f3d(mesh->xend, j, 0) + f3d(mesh->xend+1, j, 0)) ;
       }
     }
@@ -208,23 +230,23 @@ void STORM::initialise_blob(const char * imp_section){
   // Parameters Used for Blob initialisation
   bool boltzmann ;             // Switch for initialising potential of blob to boltzmann response 
   bool conserve_momentum ;     // Switch for adjusting V when seeding blob such that nV is conserved
-  BoutReal delta_perp = 0.;    // Perpendicular (x) length scale of density blob
-  BoutReal delta_perp_T = 0.;  // Perpendicular (x) length scale of temperature blob
-  BoutReal elongation = 0.;    // Elongation of the density blob: ratio between z and x axis
-  BoutReal elongation_T = 0.;  // Elongation of the temperature blob: ratio between z and x axis
-  BoutReal A = 0.;             // Density blob amplitude
-  BoutReal A_T = 0.;           // Temperature blob amplitude
-  BoutReal L_b = 0.;           // Parallel extent of density blob
-  BoutReal L_b_T = 0.;         // Parallel extent of temperature blob
-  BoutReal xoffset = 0.;       // starting z position of density blob (between 0 and 1)
-  BoutReal xoffset_T = 0.;     // starting z position of temperature blob (between 0 and 1)
-  BoutReal zoffset = 0.;       // starting z position of density blob (between 0 and 1)
-  BoutReal zoffset_T = 0.;     // starting z position of temperature blob (between 0 and 1)
-  BoutReal angle_blob = 0.;    // tilt of the density blob with respect to vertical axis, in rad
-  BoutReal angle_blob_T = 0.;  // tilt of the temperature blob with respect to vertical axis, in rad
-  BoutReal delta_front = 0.;   // Parameter used to control gradient of the density blob front. 0 = step function
-  BoutReal delta_front_T = 0.; // Parameter used to control gradient of the temperature blob front. 0 = step function
-  bool A_relative_to_bg ;      // Switch for controlling whether the amplitude of the blob is relative to the midplane density or not.
+  BoutReal delta_perp = -1.;    // Perpendicular (x) length scale of density blob
+  BoutReal delta_perp_T = -1.;  // Perpendicular (x) length scale of temperature blob
+  BoutReal elongation = -1.;    // Elongation of the density blob: ratio between z and x axis
+  BoutReal elongation_T = -1.;  // Elongation of the temperature blob: ratio between z and x axis
+  BoutReal A = -1.;             // Density blob amplitude
+  BoutReal A_T = -1.;           // Temperature blob amplitude
+  BoutReal L_b = -1.;           // Parallel extent of density blob
+  BoutReal L_b_T = -1.;         // Parallel extent of temperature blob
+  BoutReal xoffset = -1.;       // starting z position of density blob (between 0 and 1)
+  BoutReal xoffset_T = -1.;     // starting z position of temperature blob (between 0 and 1)
+  BoutReal zoffset = -1.;       // starting z position of density blob (between 0 and 1)
+  BoutReal zoffset_T = -1.;     // starting z position of temperature blob (between 0 and 1)
+  BoutReal angle_blob = -1.;    // tilt of the density blob with respect to vertical axis, in rad
+  BoutReal angle_blob_T = -1.;  // tilt of the temperature blob with respect to vertical axis, in rad
+  BoutReal delta_front = -1.;   // Parameter used to control gradient of the density blob front. 0 = step function
+  BoutReal delta_front_T = -1.; // Parameter used to control gradient of the temperature blob front. 0 = step function
+  bool A_relative_to_bg;        // Switch for controlling whether the amplitude of the blob is relative to the midplane density or not.
   Options *blob_options = Options::getRoot()->getSection(imp_section);
   
   OPTION(blob_options, delta_perp,          10) ;
@@ -255,6 +277,13 @@ void STORM::initialise_blob(const char * imp_section){
   y = FieldFactory::get()->create3D("y", NULL, mesh, CELL_CENTRE, 0)/TWOPI ;
   z = FieldFactory::get()->create3D("z", NULL, mesh, CELL_CENTRE, 0)/TWOPI ;
 
+  if (normalise_lengths){      // delta_perp is in SI
+    delta_perp = delta_perp/rho_s ;
+    if(!isothermal){
+        delta_perp_T /= rho_s;
+    }
+  }
+  
   x_can =  (x-xoffset)*cos(angle_blob) +(z-zoffset)*sin(angle_blob) ;
   z_can = -(x-xoffset)*sin(angle_blob) +(z-zoffset)*cos(angle_blob) ;
   
@@ -276,8 +305,8 @@ void STORM::initialise_blob(const char * imp_section){
     BoutReal *n_array,*T_array;
     n_array = new BoutReal[mesh->GlobalNy];
     T_array = new BoutReal[mesh->GlobalNy];
-    BoutReal nref = 0.;
-    BoutReal Tref = 0.;
+    BoutReal nref = -1.;
+    BoutReal Tref = -1.;
     read_equilibrium_file(n_array,"n_eq.dat");
     if(symmetry_plane){
       nref = n_array[mesh->ystart];
@@ -349,3 +378,40 @@ void STORM::initialise_blob(const char * imp_section){
   }
 }
 
+////////////////////////////////////////////////////////////////////////
+
+void STORM::add_noise(){
+  //Add noise to the initial profiles of n, vort, and T
+  int MYPE = BoutComm::rank();
+  srand (MYPE);
+  for (int i = 0; i < mesh->LocalNx ; i++){
+    for (int j = 0; j < mesh->LocalNy ; j++){
+      for (int k = 0; k < mesh->LocalNz ; k++){
+        n(i,j,k)    += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.0001;
+        vort(i,j,k) += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.000001;
+        if (!isothermal){
+          T(i,j,k)  += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.0001;
+        }
+      }
+    }
+  }
+}
+
+////////////////////////////////////////////////////////////////////////
+
+// Add a function given in the input file to a field
+void STORM::add_perturbation(Field3D &f, const std::string name) {
+  Options *options = Options::getRoot()->getSection("filaments");
+  Field3D perturbation = FieldFactory::get()->create3D(name, options, mesh, f.getLocation(), 0);
+  f += perturbation;
+}
+
+// For consistency, U and V should have the same radial boundary conditions, as
+// V's boundary conditions are applied to UmV_centre
+void STORM::check_U_V_x_boundary_conditions() {
+  auto options = *globalOptions;
+  ASSERT0(options["U"]["bndry_xin"].as<std::string>()
+      == options["V"]["bndry_xin"].as<std::string>());
+  ASSERT0(options["U"]["bndry_xout"].as<std::string>()
+      == options["V"]["bndry_xout"].as<std::string>());
+}
