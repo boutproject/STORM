@@ -223,7 +223,6 @@ int STORM2D::init(bool UNUSED(restarting)) {
   }
   
   if (isothermal){
-    T = 1.0 ; 
     SOLVE_FOR2(n,vort) ;
   }
   else{
@@ -258,7 +257,11 @@ int STORM2D::init(bool UNUSED(restarting)) {
 
   // Initialise the fields
   initial_profile("n", n);
-  initial_profile("T", T);  
+  if (isothermal) {
+    T = 1.0;
+  } else {
+    initial_profile("T", T);
+  }
 
   comms.add(n) ;
   if (!isothermal) comms.add(T) ;
