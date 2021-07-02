@@ -55,6 +55,7 @@ private:
   BoutReal V_sheath_prefactor, U_sheath_prefactor ;
   std::string SOL_closure ;                  // switch for 2d closure to use, either sheath_diss, vort_adv, or ESEL_like.
   bool sheath_linear ;                  // switch for linearised sheath conditions when using sheath dissipation closure
+  bool initial_noise ;                  // switch to add random noise to density and vorticity to trigger instabilities quicker
   BoutReal n_bg, T_bg, phi_bg ;                 // background value to which fluctuations decay, as a fraction of the normalisation values
   const Field3D V_sheath(const Field3D &phi, const Field3D &T) ;
   const Field3D loss_n(const BoutReal &lambda, const Field3D &n, const Field3D &phi, const Field3D &T);
@@ -95,6 +96,7 @@ int STORM2D::init(bool UNUSED(restarting)) {
   OPTION(options, isothermal,            false) ;
   OPTION(options, SOL_closure,   "sheath_diss") ;
   OPTION(options, sheath_linear,          true) ;
+  OPTION(options, initial_noise,         false) ;
   
   OPTION(options, n_bg,                    1.0) ;
   OPTION(options, T_bg,                    1.0) ;   
@@ -261,6 +263,22 @@ int STORM2D::init(bool UNUSED(restarting)) {
   comms.add(n) ;
   if (!isothermal) comms.add(T) ;
   comms.add(vort) ; 
+
+  // Seed turbulence with random noise
+  if (initial_noise){
+    output << "\tSeeding random noise for triggering turbulent instabilities\n";
+    int MYPE = BoutComm::rank();
+    srand (MYPE);
+    for(int i=0; i < mesh->LocalNx ; i++){
+      for(int k=0; k < mesh->LocalNz; k++){
+         n(i,0,k)    += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.0001;
+         vort(i,0,k) += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.00001;
+         if (!isothermal){
+           T(i,0,k)  += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.0001;
+         }
+      }
+    }
+  }
 
   output.write("\n*******************************************************************") ; 
   output.write("\nCalculated Parameters") ; 
