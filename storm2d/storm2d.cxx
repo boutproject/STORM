@@ -35,6 +35,7 @@ protected:
 private:
   Field3D n, T, vort ;                  // Evolving density, temp and vorticity
   Field3D phi ;
+  Field3D S, S_E;                       // Density and energy source terms
   Field3D n_bg_source, T_bg_source ;    // Density and temperature sources to sustain a background of (n_bg, T_bg)
   Field2D sigma_n, sigma_T, sigma_vort; // ESEL model dissipation terms
 
@@ -192,6 +193,10 @@ int STORM2D::init(bool UNUSED(restarting)) {
     sigma_T = 0.0 ;
   }
   
+  output << "\tSetting initial source profiles\n";
+  initial_profile("S", S);
+  initial_profile("S_E", S_E);
+
   // Poisson brackets: b_hat x Grad(f) dot Grad(g) / B = [f, g]
   // Method to use: BRACKET_ARAKAWA, BRACKET_STD or BRACKET_SIMPLE
   // Choose method to use for Poisson bracket advection terms
@@ -329,7 +334,7 @@ int STORM2D::rhs(BoutReal UNUSED(time)) {
   mesh->communicate(phi);
 
   // Continuity equation:  
-  ddt(n) = - bracket(phi,n,bm) - n*curv_op(phi) + curv_op(n*T) + mu_n0*Delp2(n) ;
+  ddt(n) = - bracket(phi,n,bm) - n*curv_op(phi) + curv_op(n*T) + mu_n0*Delp2(n) + S;
   
   // Choice of parallel loss terms for density
   ddt(n) -= loss_n(lambda, n, phi, T) ;
@@ -342,7 +347,7 @@ int STORM2D::rhs(BoutReal UNUSED(time)) {
 
   // Energy equation:
   if (!isothermal){
-    ddt(T) = - bracket(phi,T,bm) - (2.0/3.0)*T*curv_op(phi) + (7.0/3.0)*T*curv_op(T) + (2.0/3.0)*(SQ(T)/n)*curv_op(n) + kappa0_perp*Delp2(T) ;
+    ddt(T) = - bracket(phi,T,bm) - (2.0/3.0)*T*curv_op(phi) + (7.0/3.0)*T*curv_op(T) + (2.0/3.0)*(SQ(T)/n)*curv_op(n) + kappa0_perp*Delp2(T) + (2.0/3.0)*S_E/n - T*S/n;
 
     // Choice of parallel loss terms for temperature
     ddt(T) -= loss_T(lambda, n, phi, T) ;
