@@ -35,6 +35,7 @@ protected:
 private:
   Field3D n, T, vort ;                  // Evolving density, temp and vorticity
   Field3D phi ;
+  Field3D S, S_E;                       // Density and energy source terms
   Field3D n_bg_source, T_bg_source ;    // Density and temperature sources to sustain a background of (n_bg, T_bg)
   Field2D sigma_n, sigma_T, sigma_vort; // ESEL model dissipation terms
 
@@ -55,6 +56,7 @@ private:
   BoutReal V_sheath_prefactor, U_sheath_prefactor ;
   std::string SOL_closure ;                  // switch for 2d closure to use, either sheath_diss, vort_adv, or ESEL_like.
   bool sheath_linear ;                  // switch for linearised sheath conditions when using sheath dissipation closure
+  bool initial_noise ;                  // switch to add random noise to density and vorticity to trigger instabilities quicker
   BoutReal n_bg, T_bg, phi_bg ;                 // background value to which fluctuations decay, as a fraction of the normalisation values
   const Field3D V_sheath(const Field3D &phi, const Field3D &T) ;
   const Field3D loss_n(const BoutReal &lambda, const Field3D &n, const Field3D &phi, const Field3D &T);
@@ -95,6 +97,7 @@ int STORM2D::init(bool UNUSED(restarting)) {
   OPTION(options, isothermal,            false) ;
   OPTION(options, SOL_closure,   "sheath_diss") ;
   OPTION(options, sheath_linear,          true) ;
+  OPTION(options, initial_noise,         false) ;
   
   OPTION(options, n_bg,                    1.0) ;
   OPTION(options, T_bg,                    1.0) ;   
@@ -190,6 +193,10 @@ int STORM2D::init(bool UNUSED(restarting)) {
     sigma_T = 0.0 ;
   }
   
+  output << "\tSetting initial source profiles\n";
+  initial_profile("S", S);
+  initial_profile("S_E", S_E);
+
   // Poisson brackets: b_hat x Grad(f) dot Grad(g) / B = [f, g]
   // Method to use: BRACKET_ARAKAWA, BRACKET_STD or BRACKET_SIMPLE
   // Choose method to use for Poisson bracket advection terms
@@ -221,7 +228,6 @@ int STORM2D::init(bool UNUSED(restarting)) {
   }
   
   if (isothermal){
-    T = 1.0 ; 
     SOLVE_FOR2(n,vort) ;
   }
   else{
@@ -256,11 +262,31 @@ int STORM2D::init(bool UNUSED(restarting)) {
 
   // Initialise the fields
   initial_profile("n", n);
-  initial_profile("T", T);  
+  if (isothermal) {
+    T = 1.0;
+  } else {
+    initial_profile("T", T);
+  }
 
   comms.add(n) ;
   if (!isothermal) comms.add(T) ;
   comms.add(vort) ; 
+
+  // Seed turbulence with random noise
+  if (initial_noise){
+    output << "\tSeeding random noise for triggering turbulent instabilities\n";
+    int MYPE = BoutComm::rank();
+    srand (MYPE);
+    for(int i=0; i < mesh->LocalNx ; i++){
+      for(int k=0; k < mesh->LocalNz; k++){
+         n(i,0,k)    += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.0001;
+         vort(i,0,k) += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.00001;
+         if (!isothermal){
+           T(i,0,k)  += 2.*(((double) rand()/(RAND_MAX)) - 0.5)*0.0001;
+         }
+      }
+    }
+  }
 
   output.write("\n*******************************************************************") ; 
   output.write("\nCalculated Parameters") ; 
@@ -308,7 +334,7 @@ int STORM2D::rhs(BoutReal UNUSED(time)) {
   mesh->communicate(phi);
 
   // Continuity equation:  
-  ddt(n) = - bracket(phi,n,bm) - n*curv_op(phi) + curv_op(n*T) + mu_n0*Delp2(n) ;
+  ddt(n) = - bracket(phi,n,bm) - n*curv_op(phi) + curv_op(n*T) + mu_n0*Delp2(n) + S;
   
   // Choice of parallel loss terms for density
   ddt(n) -= loss_n(lambda, n, phi, T) ;
@@ -321,7 +347,7 @@ int STORM2D::rhs(BoutReal UNUSED(time)) {
 
   // Energy equation:
   if (!isothermal){
-    ddt(T) = - bracket(phi,T,bm) - (2.0/3.0)*T*curv_op(phi) + (7.0/3.0)*T*curv_op(T) + (2.0/3.0)*(SQ(T)/n)*curv_op(n) + kappa0_perp*Delp2(T) ;
+    ddt(T) = - bracket(phi,T,bm) - (2.0/3.0)*T*curv_op(phi) + (7.0/3.0)*T*curv_op(T) + (2.0/3.0)*(SQ(T)/n)*curv_op(n) + kappa0_perp*Delp2(T) + (2.0/3.0)*S_E/n - T*S/n;
 
     // Choice of parallel loss terms for temperature
     ddt(T) -= loss_T(lambda, n, phi, T) ;
