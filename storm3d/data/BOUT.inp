@@ -62,6 +62,7 @@ phi_wall              = 0
 isothermal            = false
 uniform_diss_paras    = false
 verbose               = false
+normalise_lengths     = false
 bracket               = 2                   # 0 = std, 1 = simple, 2 = arakawa
 add_blob              = true
 symmetry_plane        = true

@@ -68,7 +68,7 @@ def run_test(nproc=1):
         if os.path.isfile(filename):
             os.remove(filename)
     s,out = shell(createbgscript+" --nproc "+str(nproc)+" > createbg.log")
-    if s != 0:
+    if s is not 0:
         raise ValueError("Failed to run "+createbgscript)
 
 def check_test():

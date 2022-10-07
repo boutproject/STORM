@@ -122,15 +122,15 @@ void STORM::setBoundaryConditionsOptions() {
   // electron temperature
   if (!isothermal) {
     if (!average_radial_boundaries_core_SOL) {
-      opt["logT"]["bndry_xin"] = opt["logT"]["bndry_xin"].withDefault("neumann_o2");
-      opt["logT"]["bndry_xout"] = opt["logT"]["bndry_xout"].withDefault("neumann_o2");
+      opt["logp"]["bndry_xin"] = opt["logp"]["bndry_xin"].withDefault("neumann_o2");
+      opt["logp"]["bndry_xout"] = opt["logp"]["bndry_xout"].withDefault("neumann_o2");
     } else {
-      opt["logT"]["bndry_xin"] = opt["logT"]["bndry_xin"].withDefault("none");
-      opt["logT"]["bndry_xout"] = opt["logT"]["bndry_xout"].withDefault("none");
+      opt["logp"]["bndry_xin"] = opt["logp"]["bndry_xin"].withDefault("none");
+      opt["logp"]["bndry_xout"] = opt["logp"]["bndry_xout"].withDefault("none");
     }
     // y-boundary guard cells only used from T_aligned
-    opt["logT"]["bndry_ydown"] = opt["logT"]["bndry_ydown"].withDefault("none");
-    opt["logT"]["bndry_yup"] = opt["logT"]["bndry_yup"].withDefault("none");
+    opt["logp"]["bndry_ydown"] = opt["logp"]["bndry_ydown"].withDefault("none");
+    opt["logp"]["bndry_yup"] = opt["logp"]["bndry_yup"].withDefault("none");
 
     if (!average_radial_boundaries_core_SOL) {
       opt["T"]["bndry_xin"] = opt["T"]["bndry_xin"].withDefault("neumann_o2");
