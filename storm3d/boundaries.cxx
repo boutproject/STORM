@@ -46,26 +46,15 @@ void STORM::setBoundaryConditionsOptions() {
   opt["logn"]["bndry_ydown"] = opt["logn"]["bndry_ydown"].withDefault("none");
   opt["logn"]["bndry_yup"] = opt["logn"]["bndry_yup"].withDefault("none");
 
-  if (!average_radial_boundaries_core_SOL) {
-    opt["n"]["bndry_xin"] = opt["n"]["bndry_xin"].withDefault("neumann_o2");
-    opt["n"]["bndry_xout"] = opt["n"]["bndry_xout"].withDefault("neumann_o2");
-  } else {
-    opt["n"]["bndry_xin"] = opt["n"]["bndry_xin"].withDefault("none");
-    opt["n"]["bndry_xout"] = opt["n"]["bndry_xout"].withDefault("none");
-  }
-  // y-boundary guard cells only used from n_aligned
-  opt["n"]["bndry_ydown"] = opt["n"]["bndry_ydown"].withDefault("none");
-  opt["n"]["bndry_yup"] = opt["n"]["bndry_yup"].withDefault("none");
-
   // x-boundary guard cells of n_aligned not used
-  opt["n_aligned"]["bndry_xin"] = opt["n_aligned"]["bndry_xin"].withDefault("none");
-  opt["n_aligned"]["bndry_xout"] = opt["n_aligned"]["bndry_xout"].withDefault("none");
+  opt["logn_aligned"]["bndry_xin"] = opt["logn_aligned"]["bndry_xin"].withDefault("none");
+  opt["logn_aligned"]["bndry_xout"] = opt["logn_aligned"]["bndry_xout"].withDefault("none");
   if (symmetry_plane) {
-    opt["n_aligned"]["bndry_ydown"] = opt["n_aligned"]["bndry_ydown"].withDefault("neumann_o2");
+    opt["logn_aligned"]["bndry_ydown"] = opt["logn_aligned"]["bndry_ydown"].withDefault("neumann_o2");
   } else {
-    opt["n_aligned"]["bndry_ydown"] = opt["n_aligned"]["bndry_ydown"].withDefault("free_o3");
+    opt["logn_aligned"]["bndry_ydown"] = opt["logn_aligned"]["bndry_ydown"].withDefault("free_o3");
   }
-  opt["n_aligned"]["bndry_yup"] = opt["n_aligned"]["bndry_yup"].withDefault("free_o3");
+  opt["logn_aligned"]["bndry_yup"] = opt["logn_aligned"]["bndry_yup"].withDefault("free_o3");
 
   // vorticity
   if (!average_radial_boundaries_core_SOL) {
@@ -132,26 +121,15 @@ void STORM::setBoundaryConditionsOptions() {
     opt["logp"]["bndry_ydown"] = opt["logp"]["bndry_ydown"].withDefault("none");
     opt["logp"]["bndry_yup"] = opt["logp"]["bndry_yup"].withDefault("none");
 
-    if (!average_radial_boundaries_core_SOL) {
-      opt["T"]["bndry_xin"] = opt["T"]["bndry_xin"].withDefault("neumann_o2");
-      opt["T"]["bndry_xout"] = opt["T"]["bndry_xout"].withDefault("neumann_o2");
-    } else {
-      opt["T"]["bndry_xin"] = opt["T"]["bndry_xin"].withDefault("none");
-      opt["T"]["bndry_xout"] = opt["T"]["bndry_xout"].withDefault("none");
-    }
-    // y-boundary guard cells only used from T_aligned
-    opt["T"]["bndry_ydown"] = opt["T"]["bndry_ydown"].withDefault("none");
-    opt["T"]["bndry_yup"] = opt["T"]["bndry_yup"].withDefault("none");
-
     // x-boundary guard cells of T_aligned not used
-    opt["T_aligned"]["bndry_xin"] = opt["T_aligned"]["bndry_xin"].withDefault("none");
-    opt["T_aligned"]["bndry_xout"] = opt["T_aligned"]["bndry_xout"].withDefault("none");
+    opt["logT_aligned"]["bndry_xin"] = opt["logT_aligned"]["bndry_xin"].withDefault("none");
+    opt["logT_aligned"]["bndry_xout"] = opt["logT_aligned"]["bndry_xout"].withDefault("none");
     if (symmetry_plane) {
-      opt["T_aligned"]["bndry_ydown"] = opt["T_aligned"]["bndry_ydown"].withDefault("neumann_o2");
+      opt["logT_aligned"]["bndry_ydown"] = opt["logT_aligned"]["bndry_ydown"].withDefault("neumann_o2");
     } else {
-      opt["T_aligned"]["bndry_ydown"] = opt["T_aligned"]["bndry_ydown"].withDefault("free_o3");
+      opt["logT_aligned"]["bndry_ydown"] = opt["logT_aligned"]["bndry_ydown"].withDefault("free_o3");
     }
-    opt["T_aligned"]["bndry_yup"] = opt["T_aligned"]["bndry_yup"].withDefault("free_o3");
+    opt["logT_aligned"]["bndry_yup"] = opt["logT_aligned"]["bndry_yup"].withDefault("free_o3");
   }
 
   // ion velocity
@@ -236,7 +214,7 @@ void STORM::setBoundaryConditionsOptions() {
   }
 
   // ExB speed squared
-  if (!boussinesq) {
+  if (boussinesq == 0) {
     if (run_1d) {
       // Not enough x-points to use free_o3 boundary conditions, so use neumann instead
       opt["uE2"]["bndry_xin"] = opt["uE2"]["bndry_xin"].withDefault("neumann_o2");
@@ -557,7 +535,6 @@ void STORM::phi_bc_initialise(bool restarting){
   solver_options->get("monitor_timestep", monitor_timestep, false);
   if(!monitor_timestep) throw BoutException("Evolving boundary phi: monitor_timstep = false.");
 
-  restart.add(phi,"phi",0);
   restart.add(phi_bc,"phi_bc",0);
   restart.add(time_last_SOL,"time_last_SOL",0);
   restart.add(time_last_PF,"time_last_PF",0);
@@ -782,21 +759,30 @@ void STORM::average_Z_bndry(Field3D& f, const bool left, const bool right, const
 
   if (mesh->firstX() && left && (!periodic || (periodic && mesh->periodicY(mesh->xstart)) ) ) {
     int ix = mesh->xstart;
-    int ixmm = ix-2, ixm = ix-1, ixp=ix+1;
+    int ixm = ix-1;
     for(int iy=ys; iy<=ye; ++iy){
       BoutReal f_av = 0.;
-      for(int iz=0; iz<mesh->LocalNz; ++iz)
+      for(int iz=0; iz<mesh->LocalNz; ++iz){
         f_av += f(ix,iy,iz);
+      }
       f_av /= ((double)(mesh->LocalNz));
       for(int iz=0; iz<mesh->LocalNz; ++iz){
         f(ixm,iy,iz) = 2.*f_av - f(ix,iy,iz);
-        f(ixmm,iy,iz) = 3.*f(ixm,iy,iz) - 3.*f(ix,iy,iz) + f(ixp,iy,iz);
       }
     }
+
+    for (int ii=ixm; ii>0; --ii) {
+      for (int iy=ys; iy<=ye; ++iy) {
+        for (int iz=0; iz<mesh->LocalNz; ++iz) {
+          f(ii-1,iy,iz) = 3.*f(ii,iy,iz) - 3.*f(ii+1,iy,iz) + f(ii+2,iy,iz);
+        }
+      }
+    }
+
   }
   if(mesh->lastX() && right && (!periodic || (periodic && mesh->periodicY(mesh->xend)) ) ) {
     int ix = mesh->xend;
-    int ixm = ix-1, ixp=ix+1, ixpp=ix+2;
+    int ixp=ix+1;
     for(int iy=ys; iy<=ye; ++iy){
       BoutReal f_av = 0.;
       for(int iz=0; iz<mesh->LocalNz; ++iz){
@@ -805,9 +791,17 @@ void STORM::average_Z_bndry(Field3D& f, const bool left, const bool right, const
       f_av /= ((double)(mesh->LocalNz));
       for(int iz=0; iz<mesh->LocalNz; ++iz){
         f(ixp,iy,iz) = 2.*f_av - f(ix,iy,iz);
-        f(ixpp,iy,iz) = 3.*f(ixp,iy,iz) - 3.*f(ix,iy,iz) + f(ixm,iy,iz);
       }
     }
+
+    for (int ii=ixp; ii<mesh->LocalNx-1; ++ii) {
+      for (int iy=ys; iy<=ye; ++iy) {
+        for (int iz=0; iz<mesh->LocalNz; ++iz) {
+          f(ii+1,iy,iz) = 3.*f(ii,iy,iz) - 3.*f(ii-1,iy,iz) + f(ii-2,iy,iz);
+        }
+      }
+    }
+
   }
 }
 
@@ -816,24 +810,28 @@ void STORM::average_YZ_bndry(Field3D& f, const bool left, const bool right, cons
   if (mesh->firstX() && left && (!periodic || (periodic && mesh->periodicY(mesh->xstart)) ) ) {
     int ix = mesh->xstart;
     BoutReal f_av = 0.;
-    for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
-      for(int iz=0; iz<mesh->LocalNz; ++iz){
+    for(int iy=mesh->ystart; iy<=mesh->yend; ++iy)
+      for(int iz=0; iz<mesh->LocalNz; ++iz)
         f_av += f(ix,iy,iz);
-      }
-    }
-    f_av /= BoutReal(mesh->LocalNz) * BoutReal(mesh->yend - mesh->ystart + 1);
+    f_av /= BoutReal( (mesh->yend - mesh->ystart + 1) * (mesh->LocalNz) );
 
     BoutReal buff_send = f_av, buff_recv = 0.;
     int nproc;
     MPI_Comm comm = mesh->getYcomm(mesh->xstart);
     MPI_Comm_size(comm,&nproc);
     MPI_Allreduce(&buff_send, &buff_recv, 1, MPI_DOUBLE, MPI_SUM, comm);
-    f_av = buff_recv / BoutReal(nproc);
+    f_av = buff_recv/BoutReal(nproc);
 
     for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
       for(int iz=0; iz<mesh->LocalNz; ++iz){
         f(ix-1,iy,iz) = 2.*f_av - f(ix,iy,iz);
-        f(ix-2,iy,iz) = 3.*f(ix-1,iy,iz) - 3.*f(ix,iy,iz) + f(ix+1,iy,iz);
+      }
+    }
+    for (int ii=ix-1; ii>0; --ii) {
+      for (int iy=mesh->ystart; iy<=mesh->yend; ++iy) {
+        for (int iz=0; iz<mesh->LocalNz; ++iz) {
+          f(ii-1,iy,iz) = 3.*f(ii,iy,iz) - 3.*f(ii+1,iy,iz) + f(ii+2,iy,iz);
+        }
       }
     }
   }
@@ -841,24 +839,28 @@ void STORM::average_YZ_bndry(Field3D& f, const bool left, const bool right, cons
   if (mesh->lastX() && right && (!periodic || (periodic && mesh->periodicY(mesh->xend)) ) ) {
     int ix = mesh->xend;
     BoutReal f_av = 0.;
-    for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
-      for(int iz=0; iz<mesh->LocalNz; ++iz){
+    for(int iy=mesh->ystart; iy<=mesh->yend; ++iy)
+      for(int iz=0; iz<mesh->LocalNz; ++iz)
         f_av += f(ix,iy,iz);
-      }
-    }
-    f_av /= BoutReal(mesh->LocalNz) * BoutReal(mesh->yend - mesh->ystart + 1);
+    f_av /= BoutReal( (mesh->yend - mesh->ystart + 1) * (mesh->LocalNz) );
 
     BoutReal buff_send = f_av, buff_recv = 0.;
     int nproc;
     MPI_Comm comm = mesh->getYcomm(mesh->xend);
     MPI_Comm_size(comm,&nproc);
     MPI_Allreduce(&buff_send, &buff_recv, 1, MPI_DOUBLE, MPI_SUM, comm);
-    f_av = buff_recv / BoutReal(nproc);
+    f_av = buff_recv/BoutReal(nproc);
 
     for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
       for(int iz=0; iz<mesh->LocalNz; ++iz){
         f(ix+1,iy,iz) = 2.*f_av - f(ix,iy,iz);
-        f(ix+2,iy,iz) = 3.*f(ix+1,iy,iz) - 3.*f(ix,iy,iz) + f(ix-1,iy,iz);
+      }
+    }
+    for (int ii=ix+1; ii<mesh->LocalNx-1; ++ii) {
+      for (int iy=mesh->ystart; iy<=mesh->yend; ++iy) {
+        for (int iz=0; iz<mesh->LocalNz; ++iz) {
+          f(ii+1,iy,iz) = 3.*f(ii,iy,iz) - 3.*f(ii-1,iy,iz) + f(ii-2,iy,iz);
+        }
       }
     }
   }

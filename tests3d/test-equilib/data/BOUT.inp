@@ -85,7 +85,7 @@ phi_wall              = 0
 
 old_phi_wall_value    = false
 isothermal            = false
-boussinesq            = true
+boussinesq            = 1
 uniform_diss_paras    = false
 verbose               = false
 normalise_lengths     = false 

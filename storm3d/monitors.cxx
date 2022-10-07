@@ -26,5 +26,19 @@ int STORM::outputMonitor(BoutReal UNUSED(simtime), int UNUSED(iteration), int UN
     phisolver_1d();
     phi.applyBoundary();
   }
+  if (monitor_minmaxmean) {
+    output.write("\nmin(phi) = %e, max(phi) = %e, mean(phi) = %e\n",
+      min(phi,true,"RGN_NOBNDRY"),max(phi,true,"RGN_NOBNDRY"),mean(phi,true,"RGN_NOBNDRY"));
+    output.write("min(n) = %e, max(n) = %e, mean(n) = %e\n",
+      min(n,true,"RGN_NOBNDRY"),max(n,true,"RGN_NOBNDRY"),mean(n,true,"RGN_NOBNDRY"));
+    output.write("min(T) = %e, max(T) = %e, mean(T) = %e\n",
+      min(T,true,"RGN_NOBNDRY"),max(T,true,"RGN_NOBNDRY"),mean(T,true,"RGN_NOBNDRY"));
+    output.write("min(U) = %e, max(U) = %e, mean(U) = %e\n",
+      min(U_aligned,true,"RGN_NOBNDRY"),max(U_aligned,true,"RGN_NOBNDRY"),mean(U_aligned,true,"RGN_NOBNDRY"));
+    output.write("min(V) = %e, max(V) = %e, mean(V) = %e\n",
+      min(V_aligned,true,"RGN_NOBNDRY"),max(V_aligned,true,"RGN_NOBNDRY"),mean(V_aligned,true,"RGN_NOBNDRY"));
+    output.write("min(vort) = %e, max(vort) = %e, mean(vort) = %e\n",
+      min(vort,true,"RGN_NOBNDRY"),max(vort,true,"RGN_NOBNDRY"),mean(vort,true,"RGN_NOBNDRY"));
+  }
   return 0;
 }

@@ -26,6 +26,7 @@
 #include <field_factory.hxx>
 #include <bout/constants.hxx>
 #include <dataformat.hxx>
+#include <derivs.hxx>
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -86,6 +87,175 @@ void STORM::initialise_background() {
     if (electromagnetic) {
       initial_profile("psi", psi);
     }
+  }
+  else if (equilibrium_source == "single null" || equilibrium_source == "double null") {
+    if (realistic_geometry != "singlenull" && realistic_geometry != "doublenull")
+      throw BoutException("Need realistic geometry == singlenull or doublenull.");
+    n = 1.;
+    T = 1.;
+    U = 0.;
+    // y goes from 0 to 1 in the topological connected region
+    BoutReal dy, y;
+    for(int ix=mesh->xstart; ix<=mesh->xend; ++ix){
+      if (mesh->getGlobalXIndex(ix) < ixseps1) {
+        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
+          //PF region in between 0 and jyseps1_1
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_1 + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) {
+          // Core
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              n(ix,iy,iz) = -1.2*0.5*0.5+1.2*0.5+0.35;
+              T(ix,iy,iz) = -0.23*0.5*0.5+0.23*0.5+0.5;
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          // PF region between jyseps2_1 and ny_inner
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
+          // PF region between ny_inner and jyseps1_2
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_2) {
+          // Core
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              n(ix,iy,iz) = -1.2*0.5*0.5+1.2*0.5+0.35;
+              T(ix,iy,iz) = -0.23*0.5*0.5+0.23*0.5+0.5;
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
+          // PF region between jyseps2_2 and GlobalNy
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(mesh->GlobalNy - jyseps2_2 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+      }
+      else if (mesh->getGlobalXIndex(ix) >= ixseps1 && mesh->getGlobalXIndex(ix) < ixseps2) {
+        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) {
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps2_1 + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1) {
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(mesh->GlobalNy - jyseps1_2 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_2) - 0.5)*dy + 0.5;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+      }
+      else if (mesh->getGlobalXIndex(ix) >= ixseps2) {
+        if(mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner){
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 1./((double)(ny_inner));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+        else{
+          for(int iy=mesh->ystart; iy<=mesh->yend; ++iy){
+            for(int iz=0; iz<mesh->LocalNz; ++iz){
+              dy = 1./((double)(mesh->GlobalNy - ny_inner));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              n(ix,iy,iz) = -1.2*y*y + 1.2*y + 0.35;
+              T(ix,iy,iz) = -0.23*y*y+0.23*y+0.5;
+              U(ix,iy,iz) = 5.*y*y*y - 1.5*5.*y*y + (2.*sqrt(T(ix,iy,iz))+5./2.)*y - sqrt(T(ix,iy,iz));
+            }
+          }
+        }
+      }
+    }
+    if (isothermal) T = 1.;
+    mesh->communicate(n,U,T);
+    average_Z_bndry(n);
+    if (!isothermal) {
+      average_Z_bndry(T);
+    }
+    average_Z_bndry(U);
+    V = copy(U);
+    phi = log(Vsheath_BC_prefactor)*T;
+    coordinates_centre->G3 = 0.;
+    if (boussinesq > 0) {
+      vort = Delp2(phi)/B2 + coordinates_centre->g11*DDX(1./B2)*DDX(phi);
+    }
+    else {
+      vort = n*Delp2(phi)/B2 + coordinates_centre->g11*DDX(n/B2)*DDX(phi);
+    }
+    coordinates_centre->G3 = G3;
+    average_Z_bndry(vort);
+    mesh->communicate(vort);
+    if (electromagnetic) psi = 0.;
   }
   else {
     throw BoutException("Unrecognized equilibrium_source option '%s'", equilibrium_source.c_str());

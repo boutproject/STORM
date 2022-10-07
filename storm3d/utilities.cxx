@@ -23,6 +23,8 @@
 
 #include "storm.hxx"
 #include <derivs.hxx>
+#include <interpolation.hxx>
+#include <bout/coordinates.hxx>
 
 void STORM::phisolver_1d(){
   // Assume adiabaticity to get parallel profile of phi
@@ -242,7 +244,7 @@ void STORM::set_Lx_Ly_Lz() {
 
 Field3D STORM::vort_from_phi(Field3D phi) {
   Field3D result = 0.;
-  if (boussinesq) {
+  if (boussinesq > 0) {
     result = Delp2(phi);
   } else {
     result = n*this_Grad_perp2(phi) + this_Grad_perp_dot_Grad_perp(n, phi);
@@ -314,3 +316,152 @@ void STORM::set_lower_ddt_zero(Field3D &var){
     }
   }
 }
+
+void STORM::set_sources_realistic_geometry() {
+  S = 0.; S_E = 0.;
+  BoutReal x;
+
+  // Core sources
+  Options *options = Options::getRoot()->getSection("storm");
+  BoutReal S_n0, S_E0, x_Sn, x_SE, w_Sn, w_SE;
+  OPTION(options, S_n0,    0.);
+  OPTION(options, S_E0,    0.);
+  OPTION(options, x_Sn, 0.417);
+  OPTION(options, x_SE, 0.312);
+  OPTION(options, w_Sn, 0.025);
+  OPTION(options, w_SE, 0.025);
+  for(int ix = mesh->xstart; ix <= mesh->xend; ++ix){
+    for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+      if((mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_1   && mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) ||
+         (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_2)){
+        // Note: > jyseps1_2-1 to be compatible both with double null and single null
+        for(int iz = 0; iz < mesh->LocalNz; ++iz){
+          x = ((double)(mesh->getGlobalXIndex(ix))-1.5)/((double)((mesh->GlobalNx - 4)));
+          S(ix,iy,iz) = S_n0*exp(-SQ((x-x_Sn)/w_Sn));
+          S_E(ix,iy,iz) = S_E0*exp(-SQ((x-x_SE)/w_SE));
+        }
+      }
+    }
+  }
+
+  if (sources_realisticgeometry_background) {
+    if(realistic_geometry != "singlenull" && realistic_geometry != "doublenull")
+      throw BoutException("sources_realisticgeometry_background = true but wrong realistic_geometry.");
+
+    // Option useful to start a simulation, while the turbulence is not yet sustaining the profiles
+    BoutReal y, dy;
+    S_E += 1.;
+    for(int ix = mesh->xstart; ix <= mesh->xend; ++ix){
+      if (mesh->getGlobalXIndex(ix) < ixseps1) {
+        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
+          //PF region in between 0 and jyseps1_1
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_1 + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        } 
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          //PF region between jyseps2_1 and ny_inner
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
+          //PF region between ny_inner and jyseps1_2
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
+          //PF region between jyseps2_2 and NyGlobal
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(mesh->GlobalNy - jyseps2_2 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+      }
+      else if (mesh->getGlobalXIndex(ix) >= ixseps1 && mesh->getGlobalXIndex(ix) < ixseps2) {
+        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) {
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps2_1 + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1) {
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(mesh->GlobalNy - jyseps1_2 - 1));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_2) - 0.5)*dy + 0.5;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+      }
+      else if (mesh->getGlobalXIndex(ix) >= ixseps2) {
+        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          for(int iy = mesh->xstart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 1./((double)(ny_inner));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else {
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 1./((double)(mesh->GlobalNy - ny_inner));
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  S /= 13500.;
+  S_E /= 13500.;
+
+  mesh->communicate(S);
+  S.applyBoundary("free_o3");
+  S_stag = interp_to(S, CELL_YLOW, "RGN_NOBNDRY");
+
+  if (isothermal) S_E = 0.;
+}
+
