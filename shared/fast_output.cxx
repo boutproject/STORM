@@ -91,8 +91,10 @@ void FastOutput::add(const std::string name, Field3D &f, const int ix_global, co
     // Store a reference to the field
     field3d_list.push_back(&f);
 
-    // Store the indices of the element to output
-    field3d_inds.push_back({ix, iy, iz});
+    // Store the location of the element to output
+    Ind3D i(0, mesh->LocalNy, mesh->LocalNz);
+    i = i.offset(ix, iy, iz);
+    field3d_inds.push_back(i);
 
     // Extend output_vals
     output_vals.push_back(0.);

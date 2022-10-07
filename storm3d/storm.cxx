@@ -90,6 +90,7 @@ int STORM::init(bool restarting) {
   OPTION(options, equilibrium_data_file, "");
 
   OPTION(options, average_radial_boundaries_core_SOL,            false) ;
+  OPTION(options, increased_dissipation_xbndries,                false) ;
 
   // Set default values for boundary conditions for all variables.
   // Can be overridden in input file, but should never need to be.
@@ -324,7 +325,8 @@ int STORM::init(bool restarting) {
     }
     SAVE_ONCE(T);
   } else {
-    SOLVE_FOR(logT);
+    SOLVE_FOR(logp);
+    logT = logp - logn;
     T = exp(logT);
     SAVE_REPEAT(T);
     SAVE_ONCE(S_E);
@@ -432,6 +434,7 @@ int STORM::init(bool restarting) {
   n_stag.setBoundary("n");
   vort_aligned.setBoundary("vort_aligned");
   if (!isothermal) {
+    logT.setBoundary("T");
     logT_aligned.setBoundary("T_aligned");
     T_aligned.setBoundary("T_aligned");
     logT_stag.setBoundary("T");
@@ -447,7 +450,7 @@ int STORM::init(bool restarting) {
     if (electromagnetic) {
       qpar_centre.setBoundary("qpar_centre");
     }
-    comms.add(logT) ;
+    comms.add(logp) ;
   }
   if(!boussinesq){
     uE2 = 0.0;
@@ -498,6 +501,7 @@ int STORM::init(bool restarting) {
   // set initial values of logn and logT
   logn = log(n);
   logT = log(T);
+  logp = logn + logT;
 
   // set initial values of chiU, chiV
   if (!restarting) {
@@ -619,6 +623,16 @@ int STORM::init(bool restarting) {
     }
   }
 
+  // Increase dissipation near boundaries
+  bool nearboundary = false;
+  if(mesh->firstX()) nearboundary = true;
+  if(mesh->lastX()) nearboundary = true;
+  if(nearboundary && increased_dissipation_xbndries){
+    mu_n0 *= 10.;
+    mu_vort0 *= 10.;
+    kappa0_perp *= 10.;
+  }
+
   return 0;
 }
 
@@ -634,13 +648,16 @@ int STORM::rhs(BoutReal time) {
     average_YZ_bndry(logn, true, false, true);
     average_Z_bndry(vort);
     if (!isothermal) {
-      average_Z_bndry(logT);
-      average_YZ_bndry(logT, true, false, true);
+      average_Z_bndry(logp);
+      average_YZ_bndry(logp, true, false, true);
     }
   }
 
   n = exp(logn, "RGN_NOY");
-  if (!isothermal) T = exp(logT, "RGN_NOY");
+  if (!isothermal) {
+    logT = logp - logn;
+    T = exp(logT, "RGN_NOY");
+  }
 
   // Calculate field-aligned versions of fields
   logn_aligned = toFieldAligned(logn, "RGN_NOBNDRY");
@@ -660,25 +677,36 @@ int STORM::rhs(BoutReal time) {
 
   //*********** Calculate staggered interpolation for n and T, evaluate parameters depending on n and T ************
   logn_stag = stormInterp_to(logn_aligned, CELL_YLOW);
-  if (not isothermal) {
+  if (!isothermal) {
     logT_stag = stormInterp_to(logT_aligned, CELL_YLOW);
-    mesh->communicate(logn_stag, logT_stag);
-    logT_stag.applyBoundary(time);
-    if (average_radial_boundaries_core_SOL) {
-      average_Z_bndry(logT_stag);
-      average_YZ_bndry(logT_stag, true, false, true);
+  }
+  if (electromagnetic) {
+    // Derivatives of n_stag and T_stag are used only for electromagnetic runs
+    if (isothermal) {
+      mesh->communicate(logn_stag);
     }
-    T_stag = exp(logT_stag, "RGN_NOY");
+    else {
+      mesh->communicate(logn_stag, logT_stag);
+      logT_stag.applyBoundary(time);
+      if (average_radial_boundaries_core_SOL) {
+        average_Z_bndry(logT_stag);
+        average_YZ_bndry(logT_stag, true, false, true);
+      }
+      T_stag = exp(logT_stag, "RGN_NOY");
+    }
+    logn_stag.applyBoundary(time);
+    if (average_radial_boundaries_core_SOL) {
+      average_Z_bndry(logn_stag);
+      average_YZ_bndry(logn_stag, true, false, true);
+    }
+    n_stag = exp(logn_stag, "RGN_NOY");
   }
   else {
-    mesh->communicate(logn_stag);
+    n_stag = exp(logn_stag, "RGN_NOBNDRY");
+    if (!isothermal) {
+      T_stag = exp(logT_stag, "RGN_NOBNDRY");
+    }
   }
-  logn_stag.applyBoundary(time);
-  if (average_radial_boundaries_core_SOL) {
-    average_Z_bndry(logn_stag);
-    average_YZ_bndry(logn_stag, true, false, true);
-  }
-  n_stag = exp(logn_stag, "RGN_NOY");
 
   if(!isothermal){
     p = n*T;
@@ -996,33 +1024,33 @@ int STORM::rhs(BoutReal time) {
 
     //***Electron temperature Equation***
     Tcoef = (2.0/3.0)/p;
-    ddt(logT) = - bracket(phi,logT,bm,CELL_CENTRE)
-             - Vpar_Grad_par_EM(V_aligned, logT_aligned, V_centre, logT, psi_centre,
-                   CELL_CENTRE)
+    ddt(logp) = - bracket(phi,logp,bm,CELL_CENTRE)
+             - Vpar_Grad_par_EM(V_aligned, logn_aligned + logT_aligned,
+                                V_centre, logp, psi_centre, CELL_CENTRE)
              - Tcoef*Div_par_EM(qpar_aligned, qpar_centre, psi_centre,CELL_CENTRE)
              - 2./3.*0.71*UmV_centre*Grad_par_EM(logT_aligned, logT, psi_centre, CELL_CENTRE)
-             - (2./3.)*div_par_V
+             - (5./3.)*div_par_V
              + 2.0/(3.0*mu)*nu_parallel0*(pow(T, -2.5, "RGN_NOBNDRY"))*n*SQ(UmV_centre)
              + Tcoef*S_E
-             + S*SQ(V_centre)/(3.*mu*p)
-             - S/n ;
+             + S*SQ(V_centre)/(3.*mu*p);
 
     if(uniform_diss_paras){
-      ddt(logT) += Tcoef*kappa0_perp*Delp2(T);
+      ddt(logp) += Tcoef*kappa0_perp*Delp2(T);
     }
     else{
-      ddt(logT) += Tcoef*(kappa_perp*Delp2(T) + Grad_perp_dot_Grad_perp(kappa_perp, T));
+      ddt(logp) += Tcoef*(kappa_perp*Delp2(T) + Grad_perp_dot_Grad_perp(kappa_perp, T));
     }
 
     //Curvature terms for electron temperature
-    ddt(logT) += -2./3.*Curv_phi //Divergence of ExB
-      + 2./3.*(Curv_p/n + (5./2.)*Curv_T) //Divergence of diamagnetic flow and diamagnetic heat flux
+    ddt(logp) += -5./3.*Curv_phi //Divergence of ExB
+      + 5./3.*(Curv_p/n + Curv_T) //Divergence of diamagnetic flow and diamagnetic heat flux
       - SQ(V_centre)*Curv_p/(3.*mu*p); //gyro-viscous energy transfer term
 
     if (run_1d) {
       // assume we are only setting up equilibrium:
       // slow down the T evolution so we can take longer timesteps
-      ddt(logT) /= run_1d_T_slowdown;
+      // assume that we solve for ddt(logp) = 0
+      ddt(logp) = ddt(logp)/run_1d_T_slowdown + ddt(logn);
     }
   }
 

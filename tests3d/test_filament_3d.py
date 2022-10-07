@@ -29,7 +29,7 @@ Test = namedtuple('test', ['name', 'runtime'])
 def Duration(minutes, seconds):
     return timedelta(minutes=minutes, seconds=seconds)
 
-tests = [Test("test-3d", Duration(3, 43))]
+tests = [Test("test-3d", Duration(3, 23))]
 
 testcommand = "./runtest.py"
 retestOption = " --retest"
@@ -60,7 +60,7 @@ def test_filament_3d(numProcs,retest=False):
         test_time = timedelta(seconds=time.monotonic() - test_start)
 
         numTests = numTests+1
-        if s != 0:
+        if s is not 0:
             numFailures = numFailures+1
             failedTests.append(testdir)
 
@@ -75,7 +75,7 @@ def test_filament_3d(numProcs,retest=False):
 
         print("", flush=True)
 
-    if numFailures == 0:
+    if numFailures is 0:
         print("All "+str(numTests)+" tests passed")
     else:
         print(str(numFailures)+"/"+str(numTests)+" failed.")

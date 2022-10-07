@@ -53,7 +53,7 @@ def test(numProcs,retestOutput=False):
 
     if not retestOutput:
         s = run_test(numProcs)
-        if s != 0:
+        if s is not 0:
             print("Error: simulation run failed")
             return 1,1
 

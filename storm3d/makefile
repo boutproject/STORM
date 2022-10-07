@@ -27,7 +27,7 @@ endif
 SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/fast_output.cxx
 TARGET = storm
 
-GIT_VERSION := $(shell git describe --abbrev=0 --dirty --always --tags)
+GIT_VERSION := $(shell git describe --abbrev=40 --dirty --always --tags)
 CXXFLAGS += -DSTORM_VERSION=\"$(GIT_VERSION)\"
 
 include $(BOUT_TOP)/make.config

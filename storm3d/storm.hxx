@@ -81,6 +81,7 @@ private:
   Field3D vort;                // vorticity
   Field3D phi;                 // electrostatic potential
   Field3D S;                   // density source
+  Field3D logp; 
   Field3D logT; 
   Field3D T;                   // electron temperature
   Field3D qpar_aligned;        // parallel heat flux
@@ -188,6 +189,7 @@ private:
   bool use_psi_boundary_solver;// Use a Laplace solver to invert for psi on the boundary points, rather than extrapolating
   bool save_aligned_fields;    // Switch to save field-aligned versions of fields to dump files
   bool average_radial_boundaries_core_SOL; // Ad hoc boundary conditions in radial direction
+  bool increased_dissipation_xbndries; // flag to increase the perpendicular dissipation near the inner and outer boundaries
 
   // BoutReal *phi_x_boundary ; 
   FILE *file ; 
