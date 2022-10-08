@@ -65,3 +65,7 @@ data_*
 *.txt
 storm2d/storm2d
 storm3d/storm_version.hxx
+
+# CMake build directories #
+###########################
+build*

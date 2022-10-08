@@ -10,7 +10,7 @@ UKAEA/CCFE may have significant features added that are not yet included in
 this public release. If you are interested in using features that have not been
 released yet, please contact us to set up a collaboration.
 
-This version of STORM has been tested with BOUT++ v4.3.3.
+This version of STORM has been tested with BOUT++ v4.4.2.
 
 Table of Contents
 -----------------

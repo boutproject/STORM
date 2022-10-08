@@ -32,12 +32,6 @@ public:
  
   void precon(BoutReal t, BoutReal gamma, BoutReal delta); 
 private:
-  int rhs_counter = 0;
-  Equation neutral_density_equation{lognn, "lognn", Options::root()["save_equations"],
-                                    dump, rhs_counter};
-  Equation neutral_momentum_equation{nvn, "nvn", Options::root()["save_equations"], dump,
-                                     rhs_counter};
-
   Field3D nn, nvn;
   Field3D Tn;
   Field3D lognn;
@@ -55,6 +49,12 @@ private:
   Field2D g_12og_22;
   Field2D g_23og_22;
   std::string orderupwindscheme;
+
+  int rhs_counter = 0;
+  Equation neutral_density_equation{lognn, "lognn", Options::root()["save_equations"],
+                                    dump, rhs_counter};
+  Equation neutral_momentum_equation{nvn, "nvn", Options::root()["save_equations"], dump,
+                                     rhs_counter};
 
   BoutReal Tn0;            // Uniform temperature of neutrals
   BoutReal munvn;          // numerical dissipation in neutral momentum equation
@@ -111,6 +111,10 @@ private:
     NeutralDVpar* neutral_dvpar;
   };
   OutputMonitor my_output_monitor;
+
+  // Print minimum, maximum and mean of evolving variables. Used when
+  // monitor_minmaxmean=true
+  void printMinMaxMean();
 };
 
 #endif // __NEUTRAL_DVPAR_H__

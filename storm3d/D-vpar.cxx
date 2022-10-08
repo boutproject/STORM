@@ -340,14 +340,9 @@ int NeutralDVpar::timestepmonitor(BoutReal simtime) {
   if( monitor_minmaxmean ) {
     if(minmaxmean_timelast < 0.){
       minmaxmean_timelast = simtime;
-    }else if(simtime - minmaxmean_timelast > 5.){
+    } else if (simtime - minmaxmean_timelast > 5.) {
       minmaxmean_timelast = simtime;
-      output.write("\nmin(nn) = %e, max(nn) = %e, mean(nn) = %e\n",
-        min(nn,true,"RGN_NOBNDRY"),max(nn,true,"RGN_NOBNDRY"),mean(nn,true,"RGN_NOBNDRY"));
-      output.write("min(nvn) = %e, max(nvn) = %e, mean(nvn) = %e\n",
-        min(nvn,true,"RGN_NOBNDRY"),max(nvn,true,"RGN_NOBNDRY"),mean(nvn,true,"RGN_NOBNDRY"));
-      output.write("min(vn) = %e, max(vn) = %e, mean(vn) = %e\n\n",
-        min(vn,true,"RGN_NOBNDRY"),max(vn,true,"RGN_NOBNDRY"),mean(vn,true,"RGN_NOBNDRY"));
+      printMinMaxMean();
     }
   }
   
@@ -357,23 +352,37 @@ int NeutralDVpar::timestepmonitor(BoutReal simtime) {
 int NeutralDVpar::OutputMonitor::call(Solver* UNUSED(solver), BoutReal UNUSED(simtime),
                                       int UNUSED(iter), int UNUSED(NOUT)) {
   if (neutral_dvpar->monitor_minmaxmean) {
-    output.write("min(nn) = %e, max(nn) = %e, mean(nn) = %e\n",
-      min(neutral_dvpar->nn,true,"RGN_NOBNDRY"),
-      max(neutral_dvpar->nn,true,"RGN_NOBNDRY"),
-      mean(neutral_dvpar->nn,true,"RGN_NOBNDRY")
-    );
-    output.write("min(nvn) = %e, max(nvn) = %e, mean(nvn) = %e\n",
-      min(neutral_dvpar->nvn,true,"RGN_NOBNDRY"),
-      max(neutral_dvpar->nvn,true,"RGN_NOBNDRY"),
-      mean(neutral_dvpar->nvn,true,"RGN_NOBNDRY")
-    );
-    output.write("min(vn) = %e, max(vn) = %e, mean(vn) = %e\n\n",
-      min(neutral_dvpar->vn,true,"RGN_NOBNDRY"),
-      max(neutral_dvpar->vn,true,"RGN_NOBNDRY"),
-      mean(neutral_dvpar->vn,true,"RGN_NOBNDRY")
-    );
+    neutral_dvpar->printMinMaxMean();
   }
   return 0;
+}
+
+void NeutralDVpar::printMinMaxMean() {
+  output.write("min(nn) = %e, max(nn) = %e, mean(nn) = %e, ",
+    min(nn,true,"RGN_NOBNDRY"),
+    max(nn,true,"RGN_NOBNDRY"),
+    mean(nn,true,"RGN_NOBNDRY")
+  );
+  output.write("min(ddt(lognn)) = %e, max(ddt(lognn)) = %e, mean(ddt(lognn)) = %e\n",
+    min(ddt(lognn),true,"RGN_NOBNDRY"),
+    max(ddt(lognn),true,"RGN_NOBNDRY"),
+    mean(ddt(lognn),true,"RGN_NOBNDRY")
+  );
+  output.write("min(nvn) = %e, max(nvn) = %e, mean(nvn) = %e, ",
+    min(nvn,true,"RGN_NOBNDRY"),
+    max(nvn,true,"RGN_NOBNDRY"),
+    mean(nvn,true,"RGN_NOBNDRY")
+  );
+  output.write("min(ddt(nvn)) = %e, max(ddt(nvn)) = %e, mean(ddt(nvn)) = %e\n",
+    min(ddt(nvn),true,"RGN_NOBNDRY"),
+    max(ddt(nvn),true,"RGN_NOBNDRY"),
+    mean(ddt(nvn),true,"RGN_NOBNDRY")
+  );
+  output.write("min(vn) = %e, max(vn) = %e, mean(vn) = %e\n\n",
+    min(vn,true,"RGN_NOBNDRY"),
+    max(vn,true,"RGN_NOBNDRY"),
+    mean(vn,true,"RGN_NOBNDRY")
+  );
 }
 
 void NeutralDVpar::precon(BoutReal UNUSED(t), BoutReal gamma, BoutReal UNUSED(delta)) {
@@ -576,7 +585,7 @@ void NeutralDVpar::recycleFluxes(BoutReal time) {
       }
     }
 
-    delete particlesdt;
+    delete [] particlesdt;
   }
 
 }
@@ -647,14 +656,14 @@ void NeutralDVpar::initialiseSource(Options &options) {
           profileSn_upper(ix,localyindex) = profile_upper[iy]/intupper;
         }
       }
-      delete profile_upper;
-      delete profile_lower;
-      delete ydistance_upper;
-      delete ydistance_lower; 
-      delete recvbuffer;
+      delete [] profile_upper;
+      delete [] profile_lower;
+      delete [] ydistance_upper;
+      delete [] ydistance_lower;
+      delete [] recvbuffer;
     }
   }
-  delete sendbuffer;
+  delete [] sendbuffer;
   mesh->communicate(profileSn_lower);
   mesh->communicate(profileSn_upper);
   profileSn_lower.applyBoundary("free_o3");
