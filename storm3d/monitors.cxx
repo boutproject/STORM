@@ -56,15 +56,14 @@ void STORM::printMinMaxMean() {
     output.write("min(psi) = %e, max(psi) = %e, mean(psi) = %e\n",
       min(psi,true,"RGN_NOBNDRY"),max(psi,true,"RGN_NOBNDRY"),mean(psi,true,"RGN_NOBNDRY"));
   }
+
+  output.write("\n");
 }
 
 int STORM::outputMonitor(BoutReal UNUSED(simtime), int UNUSED(iteration), int UNUSED(nout)) {
   if (hydrodynamic) {
     phisolver_1d();
     phi.applyBoundary();
-  }
-  if (monitor_minmaxmean) {
-    printMinMaxMean();
   }
 
   return 0;

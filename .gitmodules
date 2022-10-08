@@ -1,3 +1,6 @@
 [submodule "shared/BoutEquation"]
 	path = shared/BoutEquation
 	url = git@github.com:johnomotani/BoutEquation
+[submodule "shared/BoutFastOutput"]
+	path = shared/BoutFastOutput
+	url = git@github.com:johnomotani/BoutFastOutput

@@ -15,6 +15,7 @@ This version of STORM has been tested with BOUT++ v4.4.2.
 Table of Contents
 -----------------
 
+* [Compiling](/doc/compiling.md)
 * [Options](/doc/options.md)
 
 License
