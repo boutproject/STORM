@@ -610,7 +610,14 @@ void STORM::setup_history_tracking(bool restarting, const std::string& storm_git
 
     {
       auto var = restart_reader.getVar("restart_counter");
-      var.getVar(&restart_counter);
+      if (var.isNull()) {
+        // Restarting from run that did not have a restart_counter, so set to 0
+        // so we start tracking from this point (restart_first_iteration
+        // records that this restart was not at iteration 0).
+        restart_counter = 0;
+      } else {
+        var.getVar(&restart_counter);
+      }
     }
 
     {
@@ -687,7 +694,6 @@ void STORM::setup_history_tracking(bool restarting, const std::string& storm_git
   input_history_name << "input_files_history" << restart_counter;
   dump.addOnce(input_files_history[restart_counter], input_history_name.str());
 
-  restart.addOnce(restart_counter, "restart_counter");
   dump.addOnce(restart_counter, "restart_counter");
 
 }
@@ -696,6 +702,9 @@ void STORM::history_tracking_first_rhs() {
   // Add new variables to restart files here, to be called after restart files have been
   // read, to avoid needing to use `restart:init_missing=true` because they were not
   // present in old restart files.
+
+  restart.addOnce(restart_counter, "restart_counter");
+
   std::stringstream iteration_history_name;
   iteration_history_name << "restart_at_iteration_history" << restart_counter;
   restart.addOnce(restart_at_iteration_history[restart_counter], iteration_history_name.str());
