@@ -26,6 +26,10 @@
 #include <interpolation.hxx>
 #include <bout/coordinates.hxx>
 
+#include <iostream>
+#include <sstream>
+#include <netcdf>
+
 void STORM::phisolver_1d(){
   // Assume adiabaticity to get parallel profile of phi
   // phi = mu/(mu+1.)*log(n) for
@@ -323,13 +327,18 @@ void STORM::set_sources_realistic_geometry() {
 
   // Core sources
   Options *options = Options::getRoot()->getSection("storm");
-  BoutReal S_n0, S_E0, x_Sn, x_SE, w_Sn, w_SE;
+  BoutReal S_n0, S_E0, x_Sn, x_SE, w_Sn, w_SE, S_nTar0;
+  bool uniform_source_targets, uniform_energy_source_background;
   OPTION(options, S_n0,    0.);
   OPTION(options, S_E0,    0.);
   OPTION(options, x_Sn, 0.417);
   OPTION(options, x_SE, 0.312);
   OPTION(options, w_Sn, 0.025);
   OPTION(options, w_SE, 0.025);
+  OPTION(options, S_nTar0, 1.);
+  OPTION(options, uniform_source_targets, false);
+  OPTION(options, uniform_energy_source_background, false);
+
   for(int ix = mesh->xstart; ix <= mesh->xend; ++ix){
     for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
       if((mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_1   && mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) ||
@@ -350,170 +359,218 @@ void STORM::set_sources_realistic_geometry() {
 
     // Option useful to start a simulation, while the turbulence is not yet sustaining the profiles
     BoutReal y, dy;
-    S_E += 1.;
+    if(uniform_energy_source_background) {
+        S_E += 1.;
+    }
     int ixseps_inner = std::min(ixseps1, ixseps2);
     int ixseps_outer = std::max(ixseps1, ixseps2);
-    for(int ix = mesh->xstart; ix <= mesh->xend; ++ix){
-      if (mesh->getGlobalXIndex(ix) < ixseps_inner) {
+    if(!uniform_source_targets) {
+      for(int ix = mesh->xstart; ix <= mesh->xend; ++ix){
+        if (mesh->getGlobalXIndex(ix) < ixseps_inner) {
+          if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
+            // PF region in between 0 and jyseps1_1 (lower inner divertor)
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(jyseps1_1 + 1));
+                // 0 < y < 0.5 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          } 
+          else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+            // PF region between jyseps2_1 and ny_inner (upper inner divertor)
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+                // 0.5 < y < 1.0 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
+            // PF region between ny_inner and jyseps1_2 (upper outer divertor)
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+                // 0 < y < 0.5 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
+            // PF region between jyseps2_2 and NyGlobal (lower outer divertor)
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps2_2 - 1));
+                // 0.5 < y < 1.0 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+        }
+        else if (mesh->getGlobalXIndex(ix) >= ixseps_outer) {
+          if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+            // SOL region on inner side
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 1./((double)(ny_inner));
+                // 0 < y < 1 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else {
+            // SOL region on outer side
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 1./((double)(mesh->GlobalNy -2*mesh->ystart - ny_inner));
+                // 0 < y < 1 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+        }
+        else if (ixseps1< ixseps2){
+          // inter-separatrix for lower double null
+          if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) {
+            // inter-separatrix including lower inner divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(jyseps2_1 + 1));
+                // 0 < y < 0.5 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+            // inter-separatrix in upper inner divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+                // 0.5 < y < 1.0 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
+            // inter-separatrix in upper outer divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+                // 0 < y < 0.5 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1) {
+            // inter-separatrix including lower outer divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps1_2 - 1));
+                // 0.5 < y < 1.0 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_2) - 0.5)*dy + 0.5;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+        }
+        else if (ixseps1> ixseps2){
+          //inter-separatrix for upper double null
+          if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
+            // inter-separatrix in lower inner divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(jyseps1_1 + 1));
+                // 0 < y < 0.5 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+            // inter-separatrix including upper inner divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(ny_inner - jyseps1_1 - 1));
+                // 0.5 < y < 1.0 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_1) - 0.5)*dy + 0.5;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_2) {
+            // inter-separatrix including upper outer divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(jyseps2_2 - ny_inner + 1));
+                // 0 < y < 0.5 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+          else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
+            // inter-separatrix in lower outer divertor leg
+            for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+              for(int iz = 0; iz < mesh->LocalNz; ++iz){
+                dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps2_2 - 1));
+                // 0.5 < y < 1.0 in this region
+                y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
+                S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              }
+            }
+          }
+        }
+      }
+    }
+    else { // uniform S distribution in the divertor legs, same as the PF regions above
+      for(int ix = mesh->xstart; ix <= mesh->xend; ++ix){
         if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
-          // PF region in between 0 and jyseps1_1 (lower inner divertor)
+          // between 0 and jyseps1_1 (lower inner divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(jyseps1_1 + 1));
-              // 0 < y < 0.5 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         } 
         else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
-          // PF region between jyseps2_1 and ny_inner (upper inner divertor)
+          // between jyseps2_1 and ny_inner (upper inner divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
-              // 0.5 < y < 1.0 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         }
         else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
-          // PF region between ny_inner and jyseps1_2 (upper outer divertor)
+          // between ny_inner and jyseps1_2 (upper outer divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
-              // 0 < y < 0.5 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         }
         else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
-          // PF region between jyseps2_2 and NyGlobal (lower outer divertor)
+          // between jyseps2_2 and NyGlobal (lower outer divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps2_2 - 1));
-              // 0.5 < y < 1.0 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-      }
-      else if (mesh->getGlobalXIndex(ix) >= ixseps_outer) {
-        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
-          // SOL region on inner side
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 1./((double)(ny_inner));
-              // 0 < y < 1 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else {
-          // SOL region on outer side
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 1./((double)(mesh->GlobalNy -2*mesh->ystart - ny_inner));
-              // 0 < y < 1 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-      }
-      else if (ixseps1< ixseps2){
-        // inter-separatrix for lower double null
-        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) {
-          // inter-separatrix including lower inner divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(jyseps2_1 + 1));
-              // 0 < y < 0.5 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
-          // inter-separatrix in upper inner divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
-              // 0.5 < y < 1.0 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
-          // inter-separatrix in upper outer divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
-              // 0 < y < 0.5 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1) {
-          // inter-separatrix including lower outer divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps1_2 - 1));
-              // 0.5 < y < 1.0 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_2) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-      }
-      else if (ixseps1> ixseps2){
-        //inter-separatrix for upper double null
-        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
-          // inter-separatrix in lower inner divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(jyseps1_1 + 1));
-              // 0 < y < 0.5 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
-          // inter-separatrix including upper inner divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(ny_inner - jyseps1_1 - 1));
-              // 0.5 < y < 1.0 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_1) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_2) {
-          // inter-separatrix including upper outer divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(jyseps2_2 - ny_inner + 1));
-              // 0 < y < 0.5 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
-          // inter-separatrix in lower outer divertor leg
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps2_2 - 1));
-              // 0.5 < y < 1.0 in this region
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+              S(ix,iy,iz) += S_nTar0*exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         }
@@ -531,3 +588,163 @@ void STORM::set_sources_realistic_geometry() {
   if (isothermal) S_E = 0.;
 }
 
+void STORM::setup_history_tracking(bool restarting, const std::string& storm_git_hash) {
+  // track history of inputs over restarts of a simulation
+
+  int restart_first_iteration;
+  if (not restarting) {
+    restart_first_iteration = 0;
+
+    // Resize here so that std::vector storage does not get reallocated after being passed
+    // to restart.addOnce() and dump.addOnce().
+    restart_at_iteration_history.resize(1);
+    input_files_history.resize(1);
+  } else {
+    // Open restart file directly with NcFile, because BOUT++'s Datafile interface is too
+    // limited. We only read stuff here, and the restart files should not currently be
+    // open, so this should not cause any problems.
+    std::stringstream restart_file_name;
+    restart_file_name << globalOptions["datadir"].as<std::string>() << "/BOUT.restart."
+                      << BoutComm::rank() << ".nc";
+    netCDF::NcFile restart_reader(restart_file_name.str(), netCDF::NcFile::read);
+
+    {
+      auto var = restart_reader.getVar("restart_counter");
+      if (var.isNull()) {
+        // Restarting from run that did not have a restart_counter, so set to 0
+        // so we start tracking from this point (restart_first_iteration
+        // records that this restart was not at iteration 0).
+        restart_counter = 0;
+      } else {
+        var.getVar(&restart_counter);
+      }
+    }
+
+    {
+      auto var = restart_reader.getVar("hist_hi");
+      var.getVar(&restart_first_iteration);
+    }
+
+    // Resize here so that std::vector storage does not get reallocated after being passed
+    // to restart.addOnce() and dump.addOnce().
+    restart_at_iteration_history.resize(restart_counter+1);
+    input_files_history.resize(restart_counter+1);
+
+    for (int i=0; i < restart_counter; i++) {
+      std::stringstream iteration_history_name;
+      iteration_history_name << "restart_at_iteration_history" << i;
+
+      restart.addOnce(restart_at_iteration_history[i], iteration_history_name.str());
+      dump.addOnce(restart_at_iteration_history[i], iteration_history_name.str());
+
+      std::stringstream input_history_name;
+      input_history_name << "input_files_history" << i;
+
+      // Have to read the input_files_history* variables before adding to `restart` and
+      // `dump` because string lengths are not allowed to change after being added.
+      {
+        auto var = restart_reader.getVar(input_history_name.str());
+        auto size = var.getDim(0).getSize();
+
+        if (size > 0) {
+          // Have to read as C-style char array
+          char* this_input_contents = new char[size];
+          var.getVar(this_input_contents);
+
+          input_files_history[i] = std::string(this_input_contents, size);
+
+          delete [] this_input_contents;
+        } else {
+          // existing value was empty string
+          input_files_history[i] = "";
+        }
+      }
+
+      restart.addOnce(input_files_history[i], input_history_name.str());
+      dump.addOnce(input_files_history[i], input_history_name.str());
+    }
+  }
+
+  restart_at_iteration_history[restart_counter] = restart_first_iteration;
+  std::stringstream iteration_history_name;
+  iteration_history_name << "restart_at_iteration_history" << restart_counter;
+  dump.addOnce(restart_at_iteration_history[restart_counter], iteration_history_name.str());
+
+  // Add current input file
+  std::stringstream input_file_name;
+  input_file_name << globalOptions["datadir"].as<std::string>() << "/"
+                  << globalOptions["optionfile"].as<std::string>() ;
+  std::ostringstream input_contents;
+  input_contents << "Restart using STORM version " << storm_git_hash << endl
+    << "----------------------------------------------------------------------------------------"
+    << endl << endl;
+  {
+    // Implementation borrowed from
+    // https://insanecoding.blogspot.com/2011/11/how-to-read-in-file-in-c.html
+    std::ifstream in(input_file_name.str(), std::ios::in | std::ios::binary);
+    if (in) {
+      input_contents << in.rdbuf();
+      in.close();
+    } else {
+      throw BoutException("Failed to open input file %s", input_file_name.str().c_str());
+    }
+  }
+  input_files_history[restart_counter] = input_contents.str();
+  std::stringstream input_history_name;
+  input_history_name << "input_files_history" << restart_counter;
+  dump.addOnce(input_files_history[restart_counter], input_history_name.str());
+
+  dump.addOnce(restart_counter, "restart_counter");
+
+}
+
+void STORM::history_tracking_first_rhs() {
+  // Add new variables to restart files here, to be called after restart files have been
+  // read, to avoid needing to use `restart:init_missing=true` because they were not
+  // present in old restart files.
+
+  restart.addOnce(restart_counter, "restart_counter");
+
+  std::stringstream iteration_history_name;
+  iteration_history_name << "restart_at_iteration_history" << restart_counter;
+  restart.addOnce(restart_at_iteration_history[restart_counter], iteration_history_name.str());
+
+  std::stringstream input_history_name;
+  input_history_name << "input_files_history" << restart_counter;
+  restart.addOnce(input_files_history[restart_counter], input_history_name.str());
+
+  restart_counter++;
+}
+
+void STORM::enhance_in_radial_buffers(Field2D& coefficient,
+                                      const int buffer_size,
+                                      const BoutReal peak_enhancement) {
+  // Inner radial boundary
+  for (int xglobal = mesh->getGlobalXIndex(0);
+       xglobal < std::min(buffer_size + mesh->xstart,
+                          mesh->getGlobalXIndex(mesh->LocalNx));
+       xglobal++) {
+
+    int xlocal = mesh->getLocalXIndex(xglobal);
+    for (int y = 0; y < mesh->LocalNy; y++) {
+      coefficient(xlocal, y) +=
+          BoutReal(buffer_size + mesh->xstart - xglobal)
+          / BoutReal(buffer_size)
+          * (peak_enhancement - 1.0) * coefficient(xlocal, y);
+    }
+  }
+
+  // Outer radial boundary
+  for (int xglobal = std::max(mesh->GlobalNx-1-buffer_size-mesh->xstart,
+                              mesh->getGlobalXIndex(0));
+       xglobal < mesh->getGlobalXIndex(mesh->LocalNx); xglobal++) {
+
+    int xlocal = mesh->getLocalXIndex(xglobal);
+    for (int y = 0; y < mesh->LocalNy; y++) {
+      coefficient(xlocal, y) +=
+          BoutReal(buffer_size + xglobal - (mesh->GlobalNx - 1 - mesh->xstart))
+          / BoutReal(buffer_size)
+          * (peak_enhancement - 1.0) * coefficient(xlocal, y);
+    }
+  }
+}

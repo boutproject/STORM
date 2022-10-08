@@ -26,6 +26,7 @@
 #include <invert_parderiv.hxx>
 #include <bout/assert.hxx>
 #include <bout/constants.hxx>
+#include "storm_version.hxx"
 
 #include <vector>
 #include <numeric>
@@ -39,13 +40,18 @@ int STORM::init(bool restarting) {
   // Add version information to output files
   dump.setAttribute("", "storm_git_hash", storm_git_hash);
   dump.setAttribute("", "storm_git_diff", storm_git_diff);
+  dump.setAttribute("", "storm_configs_git_hash", storm_configs_git_hash);
+  dump.setAttribute("", "storm_configs_git_diff", storm_configs_git_diff);
+  dump.setAttribute("", "bout_configs_git_diff", bout_configs_git_diff);
+  SAVE_ONCE(storm_cmake_cache);
+  SAVE_ONCE(module_list);
   
   coordinates_centre = mesh->getCoordinates(CELL_CENTRE);
   
   OPTION(options, mu_n0_scalar,           -1.0) ;
   OPTION(options, mu_vort0_scalar,        -1.0) ;
   OPTION(options, mu,                     -1.0) ;
-  OPTION(options, nu_parallel0,           -1.0) ;
+  OPTION(options, nu_parallel0_scalar,    -1.0) ;
   OPTION(options, g0,                     -1.0) ;  
   OPTION(options, kappa0,                 -1.0) ;
   OPTION(options, kappa0_perp_scalar,     -1.0) ;
@@ -101,6 +107,7 @@ int STORM::init(bool restarting) {
   OPTION(options, sources_realisticgeometry_background, false) ;
   OPTION(options, increased_dissipation_xbndries,        -1) ;
   OPTION(options, xbndry_dissipation_factor,            10.) ;
+  OPTION(options, increased_resistivity_xbndries,     false) ;
   OPTION(options, increased_resistivity_core,         false) ;
   OPTION(options, normalise_sources, realistic_geometry == "none") ;
 
@@ -190,8 +197,8 @@ int STORM::init(bool restarting) {
   if (mu < 0){
     mu = m_i/m_e ;
   } 
-  if (nu_parallel0 < 0 ){
-    nu_parallel0 = 0.51*nu_ei/Omega_i ; 
+  if (nu_parallel0_scalar < 0 ){
+    nu_parallel0_scalar = 0.51*nu_ei/Omega_i;
   }
   if(mu_n0_scalar < 0){
     mu_n0_scalar = (1.0 + 1.3*pow(q, 2))*(1.0 + T_i0/T_e0)*pow(rho_e, 2)*nu_ei ; // Neo-Classical Particle diffusion, m^2s-1
@@ -333,6 +340,9 @@ int STORM::init(bool restarting) {
       G3 = coordinates_centre->G3;
     }
   }
+  else {
+    B2 = 1.;
+  }
   coordinates_stag->outputVars(dump);
 
   // Save additional coordinate objects
@@ -473,7 +483,7 @@ int STORM::init(bool restarting) {
     V = chiV;
   }
 
-  SAVE_ONCE(mu_n0, mu_vort0, kappa0_perp, diff_perp_U, diff_perp_V);
+  SAVE_ONCE(mu_n0, mu_vort0, nu_parallel0, kappa0_perp, diff_perp_U, diff_perp_V);
 
   if (save_aligned_fields) {
     SAVE_REPEAT5(n_aligned, U_aligned, V_aligned, vort_aligned, phi_aligned);
@@ -533,21 +543,6 @@ int STORM::init(bool restarting) {
   if (realistic_geometry != "none" && boussinesq > 0) {
     phiSolver->setCoefD(1./B2);
     phiSolver->setCoefC2(1./B2);
-  }
-  if (split_n0) {
-    if (!evolving_bcs) {
-      throw BoutException("split_n0 not implemented for evolving_bcs=false!");
-    }
-    if (boussinesq == 0) {
-      throw BoutException("split_n0 not implemented for boussinesq == 0!");
-    }
-    phiSolverxy = new LaplaceXY(mesh);
-    if (realistic_geometry != "none") {
-      phiSolverxy->setCoefs(1./B2, 0.);
-    }
-    phi2D = 0.;
-    restart.addOnce(phi2D,"phi2D");
-    SAVE_REPEAT(phi2D);
   }
 
   if (electromagnetic) {
@@ -741,7 +736,7 @@ int STORM::init(bool restarting) {
   output.write("\nDimensionless Parameters:") ;  
   output.write("\n\tmu_n0        = %e ", mu_n0_scalar);
   output.write("\n\tmu_vort0     = %e ", mu_vort0_scalar);
-  output.write("\n\tnu_parallel0 = %e ", nu_parallel0) ; 
+  output.write("\n\tnu_parallel0 = %e ", nu_parallel0_scalar);
   output.write("\n\tg0           = %e ", g0) ; 
   output.write("\n\tmu           = %e ", mu) ;
   output.write("\n\tkappa_par    = %e ", kappa0);
@@ -796,6 +791,7 @@ int STORM::init(bool restarting) {
       iz = int(zpos*mesh->GlobalNz);
       fast_output.add("n"+std::to_string(i), n, ix, iy, iz);
       fast_output.add("T"+std::to_string(i), T, ix, iy, iz);
+      fast_output.add("phi"+std::to_string(i), phi, ix, iy, iz);
       i++;
     }
   }
@@ -804,44 +800,17 @@ int STORM::init(bool restarting) {
   mu_n0 = mu_n0_scalar;
   mu_vort0 = mu_vort0_scalar;
   kappa0_perp = kappa0_perp_scalar;
-  if(increased_dissipation_xbndries > 0) {
-    for (int xglobal = mesh->getGlobalXIndex(0);
-         xglobal < increased_dissipation_xbndries + mesh->xstart; xglobal++) {
-
-      int xlocal = mesh->XLOCAL(xglobal);
-      for (int y = 0; y < mesh->LocalNy; y++) {
-        mu_n0(xlocal, y) +=
-            BoutReal(increased_dissipation_xbndries + mesh->xstart - xglobal)
-            / BoutReal(increased_dissipation_xbndries)
-            * (xbndry_dissipation_factor - 1.0) * mu_n0_scalar;
-        mu_vort0(xlocal, y) +=
-            BoutReal(increased_dissipation_xbndries + mesh->xstart - xglobal)
-            / BoutReal(increased_dissipation_xbndries)
-            * (xbndry_dissipation_factor - 1.0) * mu_vort0_scalar;
-        kappa0_perp(xlocal, y) +=
-            BoutReal(increased_dissipation_xbndries + mesh->xstart - xglobal)
-            / BoutReal(increased_dissipation_xbndries)
-            * (xbndry_dissipation_factor - 1.0) * kappa0_perp_scalar;
-      }
-    }
-    for (int xglobal = mesh->GlobalNx-increased_dissipation_xbndries-mesh->xstart;
-         xglobal < mesh->getGlobalXIndex(mesh->LocalNx); xglobal++) {
-
-      int xlocal = mesh->XLOCAL(xglobal);
-      for (int y = 0; y < mesh->LocalNy; y++) {
-        mu_n0(xlocal, y) +=
-            BoutReal(increased_dissipation_xbndries + xglobal - (mesh->GlobalNx - mesh->xstart))
-            / BoutReal(increased_dissipation_xbndries)
-            * (xbndry_dissipation_factor - 1.0) * mu_n0_scalar;
-        mu_vort0(xlocal, y) +=
-            BoutReal(increased_dissipation_xbndries + xglobal - (mesh->GlobalNx - mesh->xstart))
-            / BoutReal(increased_dissipation_xbndries)
-            * (xbndry_dissipation_factor - 1.0) * mu_vort0_scalar;
-        kappa0_perp(xlocal, y) +=
-            BoutReal(increased_dissipation_xbndries + xglobal - (mesh->GlobalNx - mesh->xstart))
-            / BoutReal(increased_dissipation_xbndries)
-            * (xbndry_dissipation_factor - 1.0) * kappa0_perp_scalar;
-      }
+  nu_parallel0 = nu_parallel0_scalar;
+  if (increased_dissipation_xbndries > 0) {
+    enhance_in_radial_buffers(mu_n0, increased_dissipation_xbndries,
+                              xbndry_dissipation_factor);
+    enhance_in_radial_buffers(mu_vort0, increased_dissipation_xbndries,
+                              xbndry_dissipation_factor);
+    enhance_in_radial_buffers(kappa0_perp, increased_dissipation_xbndries,
+                              xbndry_dissipation_factor);
+    if (increased_resistivity_xbndries) {
+      enhance_in_radial_buffers(nu_parallel0, increased_dissipation_xbndries,
+                                xbndry_dissipation_factor);
     }
   }
 
@@ -865,12 +834,20 @@ int STORM::init(bool restarting) {
   // Preconditioner
   setPrecon((preconfunc)&STORM::precon);
 
+  setup_history_tracking(restarting, storm_git_hash);
+
   return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////
 
 int STORM::rhs(BoutReal time) { 
+
+  if (first_rhs_evaluation) {
+    first_rhs_evaluation = false;
+
+    history_tracking_first_rhs();
+  }
 
   if(verbose){ output<<"\r\t\t\t\t\t\t\t t = "<<time<<std::flush;} //Stream simulation time to screen
 
@@ -1313,8 +1290,6 @@ int STORM::rhs(BoutReal time) {
     ion_momentum_equation["perpendicular_diffusion"] = diff_perp_U*Delp2(U);
   }
 
-  set_lower_ddt_zero(chiU) ;
-
   // ***Electron parallel velocity Equation***
   if (hydrodynamic) {
     electron_momentum_equation["all"] = ddt(chiU);
@@ -1375,8 +1350,10 @@ int STORM::rhs(BoutReal time) {
     electron_pressure_equation["thermal_force"] =
       - 2./3.*0.71*UmV_centre*Grad_par_EM(logT_aligned, logT, psi_centre, CELL_CENTRE);
     electron_pressure_equation["compression"] = - (5./3.)*div_par_V;
+    // Resistive heating uses nu_parallel0_scalar so that we do not have extra resistive
+    // heating in any radial buffer regions, which is added to nu_parallel0.
     electron_pressure_equation["resistive_heating"] =
-      2.0/(3.0*mu)*nu_parallel0*(pow(T, -2.5, "RGN_NOBNDRY"))*n*SQ(UmV_centre);
+      2.0/(3.0*mu)*nu_parallel0_scalar*(pow(T, -2.5, "RGN_NOBNDRY"))*n*SQ(UmV_centre);
     electron_pressure_equation["energy_source"] = Tcoef*S_E;
 
     if(uniform_diss_paras){
@@ -1451,6 +1428,10 @@ int STORM::rhs(BoutReal time) {
     }
 
   }
+
+  set_lower_ddt_zero(chiU);
+
+  set_lower_ddt_zero(chiV);
 
   return 0;
 }

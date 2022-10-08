@@ -31,7 +31,6 @@
 #include "../shared/fast_output.hxx"
 #include "../shared/BoutEquation/equation.hxx"
 #include "neutral-model.hxx"
-#include "storm_version.hxx"
 
 class STORM : public PhysicsModel{
 public:
@@ -52,18 +51,7 @@ protected:
       }else if(simtime - minmaxmean_timelast > 5.){
         minmaxmean_timelast = simtime;
         output << "t = " << simtime << endl;
-        output.write("\nmin(phi) = %e, max(phi) = %e, mean(phi) = %e\n",
-          min(phi,true,"RGN_NOBNDRY"),max(phi,true,"RGN_NOBNDRY"),mean(phi,true,"RGN_NOBNDRY"));
-        output.write("min(n) = %e, max(n) = %e, mean(n) = %e\n",
-          min(n,true,"RGN_NOBNDRY"),max(n,true,"RGN_NOBNDRY"),mean(n,true,"RGN_NOBNDRY"));
-        output.write("min(T) = %e, max(T) = %e, mean(T) = %e\n",
-          min(T,true,"RGN_NOBNDRY"),max(T,true,"RGN_NOBNDRY"),mean(T,true,"RGN_NOBNDRY"));
-        output.write("min(U) = %e, max(U) = %e, mean(U) = %e\n",
-          min(U_aligned,true,"RGN_NOBNDRY"),max(U_aligned,true,"RGN_NOBNDRY"),mean(U_aligned,true,"RGN_NOBNDRY"));
-        output.write("min(V) = %e, max(V) = %e, mean(V) = %e\n",
-          min(V_aligned,true,"RGN_NOBNDRY"),max(V_aligned,true,"RGN_NOBNDRY"),mean(V_aligned,true,"RGN_NOBNDRY"));
-        output.write("min(vort) = %e, max(vort) = %e, mean(vort) = %e\n",
-          min(vort,true,"RGN_NOBNDRY"),max(vort,true,"RGN_NOBNDRY"),mean(vort,true,"RGN_NOBNDRY"));
+        printMinMaxMean();
       }
     }
     return ret;
@@ -101,19 +89,6 @@ private:
   void set_equilibrium_value_1d_array(BoutReal* &f_inner, BoutReal* &f_outer, const Field3D &f3d);
 
   void read_equilibrium_file(BoutReal * data, const char * fname);
-
-  // rhs_counter is used by Equation objects to know if they have to reset for a new rhs evaluation
-  int rhs_counter = 0;
-  Equation vorticity_equation{vort, "vort", globalOptions["save_equations"], dump,
-                              rhs_counter};
-  Equation density_equation{logn, "logn", globalOptions["save_equations"], dump,
-                            rhs_counter};
-  Equation ion_momentum_equation{chiU, "chiU", globalOptions["save_equations"], dump,
-                                 rhs_counter};
-  Equation electron_momentum_equation{chiV, "chiV", globalOptions["save_equations"], dump,
-                                      rhs_counter};
-  Equation electron_pressure_equation{logp, "logp", globalOptions["save_equations"], dump,
-                                      rhs_counter};
 
   Field3D logn;
   Field3D n;                   // density
@@ -176,7 +151,8 @@ private:
   BoutReal mu_vort0_scalar;     // ion viscosity
   Field2D mu_vort0;
   BoutReal mu ;                 // m_i/m_e
-  BoutReal nu_parallel0 ;       // electron-ion friction
+  BoutReal nu_parallel0_scalar; // electron-ion friction
+  Field2D nu_parallel0;
   BoutReal g0 ; 
   BoutReal kappa0 ;	            // parallel heat conduction
   BoutReal kappa0_perp_scalar;
@@ -233,8 +209,6 @@ private:
   bool sources_realistic_geometry;    // flag for sources for realistic geometries
   bool sources_realisticgeometry_background; // flag for background (useful for initial phase)
   bool isshifted;              // chech if shifted parallel transform
-  int increased_dissipation_xbndries; // increase the perpendicular dissipation for this many grid points beside the inner and outer boundaries
-  BoutReal xbndry_dissipation_factor; // factor to increase the perpendicular dissipation by in the region given by xbndry_dissipation_factor
   bool increased_resistivity_core; // flag to increase resistivity in core region
   bool normalise_sources;      // flag for normalise sources to Ly
 
@@ -242,6 +216,29 @@ private:
   Field2D B2;                  // Bxy*Bxy
   Field2D G3;                  // Useful to temporary overwrite G3
   Field2D Rxy, Zxy, psixy;     // Used to save extra grid info to dump files
+
+  // rhs_counter is used by Equation objects to know if they have to reset for a new rhs evaluation
+  int rhs_counter = 0;
+  Equation vorticity_equation{vort, "vort", globalOptions["save_equations"], dump,
+                              rhs_counter};
+  Equation density_equation{logn, "logn", globalOptions["save_equations"], dump,
+                            rhs_counter};
+  Equation ion_momentum_equation{chiU, "chiU", globalOptions["save_equations"], dump,
+                                 rhs_counter};
+  Equation electron_momentum_equation{chiV, "chiV", globalOptions["save_equations"], dump,
+                                      rhs_counter};
+  Equation electron_pressure_equation{logp, "logp", globalOptions["save_equations"], dump,
+                                      rhs_counter};
+
+  // Use this to do stuff on the first RHS evaluation
+  bool first_rhs_evaluation = true;
+
+  // stuff for tracking history of inputs over restarts of a simulation
+  int restart_counter = 0;
+  std::vector<int> restart_at_iteration_history;
+  std::vector<std::string> input_files_history;
+  void setup_history_tracking(bool restarting, const std::string& storm_git_hash);
+  void history_tracking_first_rhs();
 
   // BoutReal *phi_x_boundary ; 
   FILE *file ; 
@@ -278,7 +275,7 @@ private:
   // Apply the boundary conditions on psi
   void applyPsiBoundaries();
 
-  // Variables and functions used for averaged Neumann boundary conditions
+  // Apply neumann boundary condition on the DC (Z) and <->_YZ component
   void phi_bc_initialise(bool restarting);
   void compute_bndry_phi(const BoutReal time);
   void apply_bndry_phi();
@@ -287,13 +284,36 @@ private:
   BoutReal time_update_SOL, time_update_PF, time_update_core;
   Field2D phi_bc;
   bool first_step;
+  void average_Z_bndry(Field3D& f, const bool left = true, const bool right = true, const bool periodic = false);
+  void average_YZ_bndry(Field3D& f, const bool left = true, const bool right = true, const bool periodic = false);
+
+  // Enhance dissipation in radial buffer regions
+  ///////////////////////////////////////////////
+
+  // increase the perpendicular dissipation for this many grid points beside the inner and
+  // outer boundaries
+  int increased_dissipation_xbndries;
+
+  // factor to increase the perpendicular dissipation by in the region given by
+  // xbndry_dissipation_factor
+  BoutReal xbndry_dissipation_factor;
+
+  // Increase the resistivity beside the inner and outer boundaries by the same amount as
+  // the perpendicular dissipation. Note - this does not enhance the resistive heating (to
+  // avoid possible numerical instabilities), so energy may not be conserved in the radial
+  // buffers.
+  bool increased_resistivity_xbndries;
+
+  // Apply an enhancement to a dissipation coefficient in radial buffer regions.
+  // Enhancement is ramped linearly over a width `buffer_size` from the nominal value up to
+  // peak_enhancement*(nominal value) at the radial boundaries
+  void enhance_in_radial_buffers(Field2D& coefficient,
+                                 const int buffer_size,
+                                 const BoutReal peak_enhancement);
+
 
   // Internal variable for monitor
   BoutReal minmaxmean_timelast = -1.;
-
-  // Apply neumann boundary condition on the DC (Z) and <->_YZ component
-  void average_Z_bndry(Field3D& f, const bool left = true, const bool right = true, const bool periodic = false);
-  void average_YZ_bndry(Field3D& f, const bool left = true, const bool right = true, const bool periodic = false);
 
   //////////////////////////////////////////////////////////////
   // Object to handle fast output
@@ -351,6 +371,9 @@ private:
   // Method to set the sources for realistic geometry simulations
   void set_sources_realistic_geometry();
 
+  // Print minimum, maximum and mean of evolving variables. Used when
+  // monitor_minmaxmean=true
+  void printMinMaxMean();
 };
 
 #endif // __ FILAMENTS_H__

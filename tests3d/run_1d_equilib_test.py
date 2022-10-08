@@ -22,6 +22,7 @@
 from boututils.run_wrapper import shell
 import numpy
 import os
+from pathlib import Path
 import glob
 import time
 from datetime import datetime, timedelta
@@ -38,7 +39,9 @@ optionalTestFiles = ["T_eq.dat"]
 equilibFiles = [os.path.join(equilibDir,f) for f in testFiles+["background.mat","equilibrium.nc"] ]
 outputDir = "data/"
 outputFiles = [x for f in ["BOUT.dmp.*","BOUT.restart.*","BOUT.log.*"] for x in glob.glob(os.path.join(outputDir,f)) ]
-createbgscript = "../../storm3d/create_bg_1d"
+createbgscript = Path("..", "..", "create_bg_1d")
+if not createbgscript.exists():
+    createbgscript = Path("..", "..", "storm3d", "create_bg_1d")
 
 def test(retestOutput=False,nproc=1):
 
@@ -67,9 +70,9 @@ def run_test(nproc=1):
     for filename in equilibFiles + outputFiles:
         if os.path.isfile(filename):
             os.remove(filename)
-    s,out = shell(createbgscript+" --nproc "+str(nproc)+" > createbg.log")
+    s,out = shell(str(createbgscript)+" --nproc "+str(nproc)+" > createbg.log")
     if s != 0:
-        raise ValueError("Failed to run "+createbgscript)
+        raise ValueError("Failed to run "+str(createbgscript))
 
 def check_test():
 

@@ -25,6 +25,7 @@ from boututils.run_wrapper import launch
 from boutdata import restart
 import numpy
 import os
+from pathlib import Path
 import glob
 import time
 from datetime import datetime, timedelta
@@ -36,7 +37,9 @@ testname = os.path.basename(os.getcwd())
 runOutputDir = "data"
 runOutput = os.path.join(runOutputDir,"BOUT.dmp.*")
 runExpectedOutput = os.path.join(runOutputDir,"expectedResults","BOUT.dmp.nc")
-executable = "../../storm3d/storm"
+executable = Path("..", "..", "storm")
+if not executable.exists():
+    executable = Path("..", "..", "storm3d", "storm")
 # x-boundary cells are not set or used for these variables, so don't check them
 noXBoundaryVariables = ['qpar', 'chiU', 'chiV']
 # y-boundary cells are not set or used for these variables, so don't check them
@@ -87,8 +90,8 @@ def run_test(numProcs):
     generate_restarts(numProcs)
 
     # run simulation
-    print("running: "+executable)
-    s,out = launch(executable,nproc=numProcs,output="test_run.log")
+    print("running:", executable)
+    s,out = launch(str(executable),nproc=numProcs,output="test_run.log")
 
     return s
 
