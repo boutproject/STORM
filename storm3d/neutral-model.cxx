@@ -5,7 +5,7 @@
 #include "neutral-model.hxx"
 #include "D-vpar.hxx"
 
-NeutralModel *NeutralModel::create(Solver *solver, Options &options) {
+NeutralModel *NeutralModel::create(Solver *solver, Options &options, Datafile &dump) {
   // Decide which neutral model to use
   std::string type  = options["type"].withDefault<std::string>("none");
 
@@ -14,7 +14,7 @@ NeutralModel *NeutralModel::create(Solver *solver, Options &options) {
     return NULL;
   } else if (type == "d-vpar") {
     // Diffusive in X-Z, fluid in Y
-    return new NeutralDVpar(solver, options);
+    return new NeutralDVpar(solver, options, dump);
   }
   throw BoutException("Unrecognised neutral model '%s'", type.c_str());
 }

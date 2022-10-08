@@ -35,9 +35,11 @@ class STORM;
 BOUTMAIN(STORM);
 
 int STORM::init(bool restarting) {
+
+  // Add version information to output files
+  dump.setAttribute("", "storm_git_hash", storm_git_hash);
+  dump.setAttribute("", "storm_git_diff", storm_git_diff);
   
-  globalOptions = Options::getRoot();
-  options = Options::getRoot()->getSection("storm");
   coordinates_centre = mesh->getCoordinates(CELL_CENTRE);
   
   OPTION(options, mu_n0,                  -1.0) ;
@@ -86,8 +88,7 @@ int STORM::init(bool restarting) {
     // The user has not explicitly set equilibrium_file_path, use path relative to simulation output directory instead
     std::string equilibrium_directory;
     OPTION(options, equilibrium_directory, "equilibrium");
-    std::string data_dir;
-    Options::getRoot()->get("datadir", data_dir, "data");
+    std::string data_dir = globalOptions["datadir"].withDefault("data");
     equilibrium_file_path = data_dir + "/" + equilibrium_directory;
   }
   OPTION(options, equilibrium_data_file, "");
@@ -100,7 +101,7 @@ int STORM::init(bool restarting) {
   OPTION(options, sources_realisticgeometry_background, false) ;
   OPTION(options, increased_dissipation_xbndries,     false) ;
   OPTION(options, increased_resistivity_core,         false) ;
-  OPTION(options, normalise_sources,                   true) ;
+  OPTION(options, normalise_sources, realistic_geometry == "none") ;
 
   // Set default values for boundary conditions for all variables.
   // Can be overridden in input file, but should never need to be.
@@ -108,7 +109,7 @@ int STORM::init(bool restarting) {
   setBoundaryConditionsOptions();
 
   // Check if we're using ShiftedMetric to run simulation in x-z orthogonal coordinates
-  auto& mesh_options = (*globalOptions)["mesh"];
+  auto& mesh_options = globalOptions["mesh"];
   isshifted = false;
   if (mesh_options["paralleltransform"] == "shifted") {
     // As we use staggered grids, we must transform to/from field-aligned coordinates
@@ -268,49 +269,52 @@ int STORM::init(bool restarting) {
   }
 
   // Normalise grid mesh.   
+  coordinates_stag = mesh->getCoordinates(CELL_YLOW);
+
   if (normalise_lengths){
-    coordinates_centre->g_11 /= SQ(rho_s) ;
-    coordinates_centre->g_22 /= SQ(rho_s) ;
-    coordinates_centre->g_33 /= SQ(rho_s) ;
-    coordinates_centre->g_12 /= SQ(rho_s) ;
-    coordinates_centre->g_13 /= SQ(rho_s) ;
-    coordinates_centre->g_23 /= SQ(rho_s) ;
-    coordinates_centre->g11 *= SQ(rho_s) ;
-    coordinates_centre->g22 *= SQ(rho_s) ;
-    coordinates_centre->g33 *= SQ(rho_s) ;
-    coordinates_centre->g12 *= SQ(rho_s) ;
-    coordinates_centre->g13 *= SQ(rho_s) ;
-    coordinates_centre->g23 *= SQ(rho_s) ;
-    //mesh->dx /= rho_s ;
-    //mesh->dz /= rho_s ;
-    //mesh->dy /= rho_s ;
-    //mesh->zlength/= rho_s ;
-    coordinates_centre->geometry();
+    for (auto* coords : {coordinates_centre, coordinates_stag}) {
+      coords->g_11 /= SQ(rho_s);
+      coords->g_22 /= SQ(rho_s);
+      coords->g_33 /= SQ(rho_s);
+      coords->g_12 /= SQ(rho_s);
+      coords->g_13 /= SQ(rho_s);
+      coords->g_23 /= SQ(rho_s);
+      coords->g11 *= SQ(rho_s);
+      coords->g22 *= SQ(rho_s);
+      coords->g33 *= SQ(rho_s);
+      coords->g12 *= SQ(rho_s);
+      coords->g13 *= SQ(rho_s);
+      coords->g23 *= SQ(rho_s);
+      coords->geometry();
+    }
     if (realistic_geometry != "none") {
       G3 = coordinates_centre->G3;
     }
   }
 
   if (normalise_all) {
-    if (normalise_lengths) 
+    if (normalise_lengths) {
       throw BoutException("Error: not possible to use normalise_lengths = true and normalise_all = true.");
-    coordinates_centre->Bxy /= B_0;
+    }
+    for (auto* coords : {coordinates_centre, coordinates_stag}) {
+      coords->Bxy /= B_0;
+      coords->g_11 *= SQ(rho_s*B_0);
+      coords->g_22 /= SQ(rho_s);
+      coords->g_33 /= SQ(rho_s);
+      coords->g_12 *= B_0;
+      coords->g_13 *= B_0;
+      coords->g_23 /= SQ(rho_s);
+      coords->g11 /= SQ(rho_s*B_0);
+      coords->g22 *= SQ(rho_s);
+      coords->g33 *= SQ(rho_s);
+      coords->g12 /= B_0;
+      coords->g13 /= B_0;
+      coords->g23 *= SQ(rho_s);
+      coords->dx /= SQ(rho_s)*B_0;
+      coords->J *= B_0/rho_s;
+      coords->geometry();
+    }
     B2 = SQ(coordinates_centre->Bxy);
-    coordinates_centre->g_11 *= SQ(rho_s*B_0) ;
-    coordinates_centre->g_22 /= SQ(rho_s) ;
-    coordinates_centre->g_33 /= SQ(rho_s) ;
-    coordinates_centre->g_12 *= B_0 ;
-    coordinates_centre->g_13 *= B_0 ;
-    coordinates_centre->g_23 /= SQ(rho_s) ;
-    coordinates_centre->g11 /= SQ(rho_s*B_0) ;
-    coordinates_centre->g22 *= SQ(rho_s) ;
-    coordinates_centre->g33 *= SQ(rho_s) ;
-    coordinates_centre->g12 /= B_0 ; 
-    coordinates_centre->g13 /= B_0 ;
-    coordinates_centre->g23 *= SQ(rho_s) ;
-    coordinates_centre->dx /= SQ(rho_s)*B_0;
-    coordinates_centre->J *= B_0/rho_s;
-    coordinates_centre->geometry();
     if (realistic_geometry != "none") {
       // Load curvature operator
       bxcv.x /= B_0;
@@ -320,14 +324,26 @@ int STORM::init(bool restarting) {
       G3 = coordinates_centre->G3;
     }
   }
+  coordinates_stag->outputVars(dump);
 
+  // Save additional coordinate objects
+  // Note: Rxy, Zxy and psixy are *not* normalised
+  if (mesh->get(Rxy, "Rxy") == 0) {
+    mesh->communicate(Rxy);
+    SAVE_ONCE(Rxy);
+  }
+  if (mesh->get(Zxy, "Zxy") == 0) {
+    mesh->communicate(Zxy);
+    SAVE_ONCE(Zxy);
+  }
+  if (mesh->get(psixy, "psixy") == 0) {
+    mesh->communicate(psixy);
+    SAVE_ONCE(psixy);
+  }
   if (realistic_geometry != "none") {
-    // Save additional coordinate objects
     dump.addOnce(bxcv.x, "bxcvx");
     dump.addOnce(bxcv.y, "bxcvy");
     dump.addOnce(bxcv.z, "bxcvz");
-    coordinates_stag = mesh->getCoordinates(CELL_YLOW);
-    coordinates_stag->outputVars(dump);
   }
 
   int bracket; 
@@ -380,10 +396,10 @@ int STORM::init(bool restarting) {
 
   // ******** Initialise constant fields ********
   if (!sources_realistic_geometry) {
-    S = FieldFactory::get()->create3D("S:function", Options::getRoot(), mesh, CELL_CENTRE, 0);
-    S_stag = FieldFactory::get()->create3D("S:function", Options::getRoot(), mesh, CELL_YLOW, 0);
+    S = FieldFactory::get()->create3D("S:function", &globalOptions, mesh, CELL_CENTRE, 0);
+    S_stag = FieldFactory::get()->create3D("S:function", &globalOptions, mesh, CELL_YLOW, 0);
     if (!isothermal) {
-      S_E = FieldFactory::get()->create3D("S_E:function", Options::getRoot(), mesh, CELL_CENTRE, 0);
+      S_E = FieldFactory::get()->create3D("S_E:function", &globalOptions, mesh, CELL_CENTRE, 0);
     }
     
     if (normalise_sources) {
@@ -424,8 +440,10 @@ int STORM::init(bool restarting) {
     logT_stag = 0.;
     T_stag = exp(logT_stag, "RGN_NOY");
     sqrtT = 1.;
-    T_sheath_upper = exp(extrap_sheath_upper(logT_aligned));
-    if (!symmetry_plane) {
+    if (mesh->hasBndryUpperY()) {
+      T_sheath_upper = exp(extrap_sheath_upper(logT_aligned));
+    }
+    if (!symmetry_plane and mesh->hasBndryLowerY()) {
       T_sheath_lower = exp(extrap_sheath_lower(logT_aligned));
     }
     SAVE_ONCE(T);
@@ -456,13 +474,22 @@ int STORM::init(bool restarting) {
     }
   }
 
-  Options* phiOptions;
-  if (globalOptions->isSection("phiSolver")) {
-    phiOptions = globalOptions->getSection("phiSolver");
+  Options& phiOptions = globalOptions.isSection("phiSolver")
+                        ? *globalOptions.getSection("phiSolver")
+                        : *globalOptions.getSection("laplace");
+  if (split_n0) {
+    // Set DC part to zero - this part will be solved by phiSolverxy
+    phiOptions["global_flags"] = phiOptions["global_flags"].withDefault(1);
+    // keep boundary flags set to 0 (zero-value Dirichlet), which is the BOUT++ default
   } else {
-    phiOptions = globalOptions->getSection("laplace");
+    // Set the radial boundary conditions to non-zero Dirichlet, with the value passed
+    // in the boundary cells of the 'initial guess'
+    phiOptions["inner_boundary_flags"]
+      = phiOptions["inner_boundary_flags"].withDefault(16);
+    phiOptions["outer_boundary_flags"]
+      = phiOptions["outer_boundary_flags"].withDefault(16);
   }
-  phiSolver = Laplacian::create(phiOptions);
+  phiSolver = Laplacian::create(&phiOptions);
   phi = phi_wall ;  // Sets phi field to 0 for inital 'guess' of Laplace solver
   phi.setBoundary("phi") ;
   phi_aligned.setBoundary("phi_aligned") ;
@@ -488,11 +515,12 @@ int STORM::init(bool restarting) {
     }
     phi2D = 0.;
     restart.addOnce(phi2D,"phi2D");
+    SAVE_REPEAT(phi2D);
   }
 
   if (electromagnetic) {
-    auto psi_options = globalOptions->getSection("psiSolver");
-    psiSolver = Laplacian::create(psi_options, CELL_YLOW);
+    Options& psi_options = *globalOptions.getSection("psiSolver");
+    psiSolver = Laplacian::create(&psi_options, CELL_YLOW);
 
     // Check that the Laplacian solver uses 3D coefficients
     ASSERT0(psiSolver->uses3DCoefs());
@@ -503,7 +531,7 @@ int STORM::init(bool restarting) {
     psi_aligned.setBoundary("psi_aligned");
     psi_centre.setBoundary("psi_centre");
 
-    use_psi_boundary_solver = (*psi_options)["use_psi_boundary_solver"].withDefault(true);
+    use_psi_boundary_solver = psi_options["use_psi_boundary_solver"].withDefault(true);
     if (use_psi_boundary_solver) {
       // Check there isn't a limiter-type boundary where we can't use a solver on the
       // boundary point
@@ -515,20 +543,20 @@ int STORM::init(bool restarting) {
             or (ixseps1 <= 0 and ixseps2 <= 0)
             or (ixseps1 >= mesh->GlobalNx and ixseps2 >= mesh->GlobalNx));
 
-      std::string psi_solver_type = (*globalOptions)["psiSolver"]["type"];
+      std::string psi_solver_type = globalOptions["psiSolver"]["type"];
       if (psi_solver_type == "naulin") {
         // Actually only need the FFT sub-solver as at the boundary we solve Delp2(psi) =
         // n*(U-V) which has constant coefficients
-        psiBoundarySolver = Laplacian::create(psi_options->getSection("delp2solver"), CELL_YLOW);
+        psiBoundarySolver = Laplacian::create(psi_options.getSection("delp2solver"), CELL_YLOW);
 
         // Set boundary flags from psiSolver options, like LaplaceNaulin does in its
         // constructor
         psiBoundarySolver->setInnerBoundaryFlags(
-            (*psi_options)["inner_boundary_flags"].as<int>());
+            psi_options["inner_boundary_flags"].as<int>());
         psiBoundarySolver->setOuterBoundaryFlags(
-            (*psi_options)["outer_boundary_flags"].as<int>());
+            psi_options["outer_boundary_flags"].as<int>());
       } else {
-        psiBoundarySolver = Laplacian::create(psi_options, CELL_YLOW);
+        psiBoundarySolver = Laplacian::create(&psi_options, CELL_YLOW);
       }
 
       if (mesh->hasBndryLowerY() and not symmetry_plane) {
@@ -660,7 +688,7 @@ int STORM::init(bool restarting) {
   //************** Output of Summary **********************
   
   output.write("\n*******************************************************************") ; 
-  output.write("\nGit Version of STORM: %s", STORM_VERSION) ;
+  output.write("\nGit Version of STORM: %s", storm_git_hash) ;
   output.write("\n*******************************************************************") ; 
   output.write("\nCalculated Parameters") ; 
   output.write("\n*******************************************************************") ; 
@@ -721,12 +749,12 @@ int STORM::init(bool restarting) {
     int i = 0;
     BoutReal xpos, ypos, zpos;
     int ix, iy, iz;
-    Options* fast_output_options = globalOptions->getSection("fast_output");
+    Options& fast_output_options = *globalOptions.getSection("fast_output");
     while (true) {
       // Add more points if explicitly set in input file
-      fast_output_options->get("xpos"+std::to_string(i), xpos, -1.);
-      fast_output_options->get("ypos"+std::to_string(i), ypos, -1.);
-      fast_output_options->get("zpos"+std::to_string(i), zpos, -1.);
+      xpos = fast_output_options["xpos"+std::to_string(i)].withDefault(-1.);
+      ypos = fast_output_options["ypos"+std::to_string(i)].withDefault(-1.);
+      zpos = fast_output_options["zpos"+std::to_string(i)].withDefault(-1.);
       if (xpos<0. || ypos<0. || zpos<0.) {
         output.write("\tAdded %i fast_output points\n", i);
         break;
@@ -758,7 +786,7 @@ int STORM::init(bool restarting) {
   // Neutral models
   
   TRACE("Initialising neutral models");
-  neutrals = NeutralModel::create(solver, Options::root()["neutral"]);
+  neutrals = NeutralModel::create(solver, globalOptions["neutral"], dump);
   
   // Set normalisations
   if (neutrals != NULL) {
@@ -778,6 +806,8 @@ int STORM::init(bool restarting) {
 int STORM::rhs(BoutReal time) { 
 
   if(verbose){ output<<"\r\t\t\t\t\t\t\t t = "<<time<<std::flush;} //Stream simulation time to screen
+
+  rhs_counter++;
 
   mesh->communicate(comms) ;
   if (average_radial_boundaries_core_SOL) {
@@ -855,13 +885,17 @@ int STORM::rhs(BoutReal time) {
   //********** Extrapolate BC for density and temperature to calculate BC on V, U and q_par **********
   // Extrapolate in field-aligned coordinates since these are used for parallel boundary
   // conditions
-  n_sheath_upper = exp(extrap_sheath_upper(logn_aligned));
-  if(!symmetry_plane){
+  if (mesh->hasBndryUpperY()) {
+    n_sheath_upper = exp(extrap_sheath_upper(logn_aligned));
+  }
+  if(!symmetry_plane and mesh->hasBndryLowerY()){
     n_sheath_lower = exp(extrap_sheath_lower(logn_aligned));
   }
   if (!isothermal) {
-    T_sheath_upper = exp(extrap_sheath_upper(logT_aligned));
-    if(!symmetry_plane){
+    if (mesh->hasBndryUpperY()) {
+      T_sheath_upper = exp(extrap_sheath_upper(logT_aligned));
+    }
+    if(!symmetry_plane and mesh->hasBndryLowerY()){
       T_sheath_lower = exp(extrap_sheath_lower(logT_aligned));
     }
   }
@@ -962,8 +996,12 @@ int STORM::rhs(BoutReal time) {
   }  
 
   // Extrapolate phi at boundary for V boundary condition
-  phi_sheath_lower = extrap_sheath_lower(phi_aligned) ;
-  phi_sheath_upper = extrap_sheath_upper(phi_aligned) ;
+  if (not symmetry_plane and mesh->hasBndryLowerY()) {
+    phi_sheath_lower = extrap_sheath_lower(phi_aligned) ;
+  }
+  if (mesh->hasBndryUpperY()) {
+    phi_sheath_upper = extrap_sheath_upper(phi_aligned) ;
+  }
 
   if (electromagnetic) {
     //********* Laplace inversion: calculation of psi, U and V *********
@@ -1025,12 +1063,14 @@ int STORM::rhs(BoutReal time) {
   V_aligned.applyBoundary(time);
   
   //********** Sheath BC on the ion and electron velocity, U and V ********
-  if (!symmetry_plane) {
+  if (!symmetry_plane and mesh->hasBndryLowerY()) {
     Vsheath_ydown_staggered(V_aligned, phi_sheath_lower, phi_wall, T_sheath_lower, Vsheath_BC_prefactor) ;
     Usheath_ydown_staggered(U_aligned, sqrt(T_sheath_lower), Usheath_BC_prefactor);
   }
-  Vsheath_yup_staggered(V_aligned, phi_sheath_upper, phi_wall, T_sheath_upper, Vsheath_BC_prefactor);
-  Usheath_yup_staggered(U_aligned, sqrt(T_sheath_upper), Usheath_BC_prefactor);
+  if (mesh->hasBndryUpperY()) {
+    Vsheath_yup_staggered(V_aligned, phi_sheath_upper, phi_wall, T_sheath_upper, Vsheath_BC_prefactor);
+    Usheath_yup_staggered(U_aligned, sqrt(T_sheath_upper), Usheath_BC_prefactor);
+  }
   if (mesh->yend - mesh->ystart + 1 < 3) {
     // Need to communicate mesh->ystart point that has just been set by boundary conditions
     mesh->communicate(U_aligned, V_aligned);
@@ -1107,70 +1147,79 @@ int STORM::rhs(BoutReal time) {
   
   // ***Vorticity Equation***
   if (hydrodynamic) {
-    ddt(vort) = 0.;
+    vorticity_equation["all"] = 0.;
   }
   else {
-    ddt(vort) = - bracket(phi, vort, bm, CELL_CENTRE)
-                - Vpar_Grad_par_EM(U_aligned, vort_aligned, U_centre, vort,
-                      psi_centre, CELL_CENTRE);
+    vorticity_equation["ExB_advection"] = - bracket(phi, vort, bm, CELL_CENTRE);
+    vorticity_equation["parallel_advection"] =
+      - Vpar_Grad_par_EM(U_aligned, vort_aligned, U_centre, vort, psi_centre,
+                         CELL_CENTRE);
     if (boussinesq == 1 || boussinesq == 3 || boussinesq == 4) {
       // Grad(n*Grad_perp(phi)) = n*Delp2(phi)
-      ddt(vort) += Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)
-                 + UmV_centre*Grad_par_EM(logn_aligned, logn, psi_centre, CELL_CENTRE);
+      vorticity_equation["parallel_current"] =
+        Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)
+        + UmV_centre*Grad_par_EM(logn_aligned, logn, psi_centre, CELL_CENTRE);
     }
     else if (boussinesq == 0 || boussinesq == 2) {
       // Grad(n*Grad_perp(phi)) = Delp2(phi) or non-boussinesq
-       ddt(vort) += n*( Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)
-                      + UmV_centre*Grad_par_EM(logn_aligned, logn, psi_centre, CELL_CENTRE) );
+       vorticity_equation["parallel_current"] =
+         n*( Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)
+             + UmV_centre*Grad_par_EM(logn_aligned, logn, psi_centre, CELL_CENTRE) );
     }
     else {
       throw BoutException("Boussinesq option unrecognized.");
     }
 
     if (boussinesq == 0) {
-      ddt(vort) -= bracket(uE2/2.,n,bm); //check normalisation of last term
+      vorticity_equation["bracket_uE2"] = -bracket(uE2/2.,n,bm); //check normalisation of last term
     }
 
     if (boussinesq == 3) {
-      ddt(vort) -= S*vort + coordinates_centre->g11*DDX(S)*DDX(phi)/B2; // assumes S axisymmetric
+      // assumes S axisymmetric
+      vorticity_equation["density_source"] = - S*vort
+                                             - coordinates_centre->g11*DDX(S)*DDX(phi)/B2;
     }
 
     if(uniform_diss_paras){
-      ddt(vort) += mu_vort0*Delp2(vort) ;
+      vorticity_equation["perpendicular_diffusion"] = mu_vort0*Delp2(vort);
     }
     else{
-     ddt(vort) +=  mu_vort*Delp2(vort) + Grad_perp_dot_Grad_perp(mu_vort, vort);
+     vorticity_equation["perpendicular_diffusion"] =
+       mu_vort*Delp2(vort) + Grad_perp_dot_Grad_perp(mu_vort, vort);
     }
 
     // Curvature terms for vorticity
     if (boussinesq == 1 || boussinesq == 3 || boussinesq == 4) {
-      ddt(vort) += Curv_p/n;
+      vorticity_equation["curvature"] = Curv_p/n;
     }
     else {
-      ddt(vort) += Curv_p;
+      vorticity_equation["curvature"] = Curv_p;
     }
   }
 
   Field3D div_par_V = Div_par_EM(V_aligned, V_centre, psi_centre, CELL_CENTRE);
   // ***Density Equation***
-  ddt(logn) = - bracket(phi, logn, bm, CELL_CENTRE)
-           - div_par_V
-           - Vpar_Grad_par_EM(V_aligned, logn_aligned, V_centre, logn, psi_centre, CELL_CENTRE)
-           + S/n;
+  density_equation["ExB_advection"] = - bracket(phi, logn, bm, CELL_CENTRE);
+  density_equation["parallel_advection"] =
+    - div_par_V
+    - Vpar_Grad_par_EM(V_aligned, logn_aligned, V_centre, logn, psi_centre, CELL_CENTRE);
+  density_equation["density_source"] = S/n;
   
   if (uniform_diss_paras) {
-    ddt(logn) += mu_n0*Delp2(n)/n;
+    density_equation["perpendicular_diffusion"] = mu_n0*Delp2(n)/n;
   }
   else {
     // Include y derivatives??
-    ddt(logn) += mu_n*Delp2(n)/n + Grad_perp_dot_Grad_perp(mu_n, logn) ;
+    density_equation["perpendicular_diffusion"] = mu_n*Delp2(n)/n
+                                                    + Grad_perp_dot_Grad_perp(mu_n, logn);
   }
 
   // Curvature terms for density 
-  ddt(logn) += -Curv_phi + Curv_p/n;
+  density_equation["ExB_curvature"] = -Curv_phi;
+  density_equation["diamagnetic_curvature"] = Curv_p/n;
 
   if (boussinesq == 4) {
-    ddt(vort) -= vort*ddt(logn);
+    vorticity_equation["vort*dndt"] = -vort*ddt(logn);
   }
 
   // ***Ion parallel velocity Equation*** 
@@ -1185,34 +1234,37 @@ int STORM::rhs(BoutReal time) {
   } else {
     Grad_par_phi_stag = Grad_par_EM(phi_aligned, phi_stag, psi, CELL_YLOW);
   }
-  ddt(chiU) = - bracket(phi_stag, U, bm, CELL_YLOW)
-              - Vpar_Grad_par_EM(U_aligned, U_aligned, U, U, psi, CELL_YLOW)
-              - Grad_par_phi_stag
-              - (nu_parallel/mu)*UmV
-              - (U*S_stag)/n_stag
-              + 0.71*Grad_par_T_stag;
+  ion_momentum_equation["ExB_advection"] = - bracket(phi_stag, U, bm, CELL_YLOW);
+  ion_momentum_equation["parallel_advection"] =
+    - Vpar_Grad_par_EM(U_aligned, U_aligned, U, U, psi, CELL_YLOW);
+  ion_momentum_equation["grad_phi"] = - Grad_par_phi_stag;
+  ion_momentum_equation["resistivity"] = - (nu_parallel/mu)*UmV;
+  ion_momentum_equation["thermal_force"] = 0.71*Grad_par_T_stag;
+  ion_momentum_equation["density_source"] = - (U*S_stag)/n_stag;
 
   if (diff_perp_U > 0.) {
-    ddt(chiU) += diff_perp_U*Delp2(U);
+    ion_momentum_equation["perpendicular_diffusion"] = diff_perp_U*Delp2(U);
   }
 
   set_lower_ddt_zero(chiU) ;
 
   // ***Electron parallel velocity Equation***
   if (hydrodynamic) {
-    ddt(chiV) = ddt(chiU);
+    electron_momentum_equation["all"] = ddt(chiU);
   }
   else {
-    ddt(chiV) = - bracket(phi_stag, V, bm, CELL_YLOW)
-                - Vpar_Grad_par_EM(V_aligned, V_aligned, V, V, psi, CELL_YLOW)
-                + mu*Grad_par_phi_stag
-                + nu_parallel*UmV
-                - mu*T_stag*Grad_par_EM(logn_aligned, logn_stag, psi, CELL_YLOW)
-                - (1.71*mu)*Grad_par_T_stag
-                - (V*S_stag)/n_stag ;
+    electron_momentum_equation["ExB_advection"] = - bracket(phi_stag, V, bm, CELL_YLOW);
+    electron_momentum_equation["parallel_advection"] =
+      - Vpar_Grad_par_EM(V_aligned, V_aligned, V, V, psi, CELL_YLOW);
+    electron_momentum_equation["grad_phi"] = mu*Grad_par_phi_stag;
+    electron_momentum_equation["resistivity"] = nu_parallel*UmV;
+    electron_momentum_equation["density_gradient"] =
+      - mu*T_stag*Grad_par_EM(logn_aligned, logn_stag, psi, CELL_YLOW);
+    electron_momentum_equation["temperature_gradient"] = - (1.71*mu)*Grad_par_T_stag;
+    electron_momentum_equation["density_source"] = - (V*S_stag)/n_stag;
 
     if (diff_perp_V > 0.) {
-      ddt(chiV) += diff_perp_V*Delp2(V);
+      electron_momentum_equation["perpendicular_diffusion"] = diff_perp_V*Delp2(V);
     }
 
     set_lower_ddt_zero(chiV) ;
@@ -1245,36 +1297,44 @@ int STORM::rhs(BoutReal time) {
 
     //***Electron temperature Equation***
     Tcoef = (2.0/3.0)/p;
-    ddt(logp) = - bracket(phi,logp,bm,CELL_CENTRE)
-             - Vpar_Grad_par_EM(V_aligned, logn_aligned + logT_aligned,
-                                V_centre, logp, psi_centre, CELL_CENTRE)
-             - Tcoef*Div_par_EM(qpar_aligned, qpar_centre, psi_centre,CELL_CENTRE)
-             - 2./3.*0.71*UmV_centre*Grad_par_EM(logT_aligned, logT, psi_centre, CELL_CENTRE)
-             - (5./3.)*div_par_V
-             + 2.0/(3.0*mu)*nu_parallel0*(pow(T, -2.5, "RGN_NOBNDRY"))*n*SQ(UmV_centre)
-             + Tcoef*S_E;
+    electron_pressure_equation["ExB_advection"] = - bracket(phi,logp,bm,CELL_CENTRE);
+    electron_pressure_equation["parallel_advection"] =
+      - Vpar_Grad_par_EM(V_aligned, logn_aligned + logT_aligned, V_centre, logp,
+                         psi_centre, CELL_CENTRE);
+    electron_pressure_equation["parallel_conduction"] =
+      - Tcoef*Div_par_EM(qpar_aligned, qpar_centre, psi_centre,CELL_CENTRE);
+    electron_pressure_equation["thermal_force"] =
+      - 2./3.*0.71*UmV_centre*Grad_par_EM(logT_aligned, logT, psi_centre, CELL_CENTRE);
+    electron_pressure_equation["compression"] = - (5./3.)*div_par_V;
+    electron_pressure_equation["resistive_heating"] =
+      2.0/(3.0*mu)*nu_parallel0*(pow(T, -2.5, "RGN_NOBNDRY"))*n*SQ(UmV_centre);
+    electron_pressure_equation["energy_source"] = Tcoef*S_E;
 
     if(uniform_diss_paras){
-      ddt(logp) += Tcoef*kappa0_perp*Delp2(T);
+      electron_pressure_equation["perpendicular_diffusion"] = Tcoef*kappa0_perp*Delp2(T);
     }
     else{
-      ddt(logp) += Tcoef*(kappa_perp*Delp2(T) + Grad_perp_dot_Grad_perp(kappa_perp, T));
+      electron_pressure_equation["perpendicular_diffusion"] =
+        Tcoef*(kappa_perp*Delp2(T) + Grad_perp_dot_Grad_perp(kappa_perp, T));
     }
 
     if (S_in_peq) {
-      ddt(logp) += S*SQ(V_centre)/(3.*mu*p);
+      electron_pressure_equation["S*V^2/3/mu/p"] = S*SQ(V_centre)/(3.*mu*p);
     }
 
     //Curvature terms for electron temperature
-    ddt(logp) += -5./3.*Curv_phi //Divergence of ExB
-      + 5./3.*(Curv_p/n + Curv_T) //Divergence of diamagnetic flow and diamagnetic heat flux
-      - SQ(V_centre)*Curv_p/(3.*mu*p); //gyro-viscous energy transfer term
+    // Divergence of ExB
+    electron_pressure_equation["ExB_curvature"] = -5./3.*Curv_phi;
+    // Divergence of diamagnetic flow and diamagnetic heat flux
+    electron_pressure_equation["diamagnetic_curvature"] = 5./3.*(Curv_p/n + Curv_T);
+    // gyro-viscous energy transfer term
+    electron_pressure_equation["gyroviscous_curvature"] = - SQ(V_centre)*Curv_p/(3.*mu*p);
 
     if (run_1d) {
       // assume we are only setting up equilibrium:
       // slow down the T evolution so we can take longer timesteps
       // assume that we solve for ddt(logp) = 0
-      ddt(logp) = ddt(logp)/run_1d_T_slowdown + ddt(logn);
+      ddt(logp) = (ddt(logp) - ddt(logn))/run_1d_T_slowdown + ddt(logn);
     }
   }
 
@@ -1291,25 +1351,30 @@ int STORM::rhs(BoutReal time) {
     neutrals->update(n, n_stag, U, V, T, T_stag, time);
 
     // Add sources/sinks to plasma equations
-    ddt(logn) -= neutrals->S/n;
+    density_equation["ionisation_recombination"] = -neutrals->S/n;
 
     Field3D Son_stag = neutrals->S_stag/n_stag;
-    ddt(chiU) += -neutrals->Fi/n_stag + Son_stag*U;
+    ion_momentum_equation["neutral_friction"] = -neutrals->Fi/n_stag;
+    ion_momentum_equation["neutral_source"] = Son_stag*U;
 
-    ddt(chiV) += -neutrals->Fe/n_stag + Son_stag*V;
+    electron_momentum_equation["neutral_friction"] = -neutrals->Fe/n_stag;
+    electron_momentum_equation["neutral_source"] = Son_stag*V;
 
     if (boussinesq == 2) {
-      ddt(vort) -= neutrals->Fperp*vort + Grad_perp_dot_Grad_perp(neutrals->Fperp, phi)/B2;
+      vorticity_equation["neutral_friction"] =
+        - neutrals->Fperp*vort - Grad_perp_dot_Grad_perp(neutrals->Fperp, phi)/B2;
     }
     else if (boussinesq == 1 || boussinesq == 3 || boussinesq == 4) {
-      ddt(vort) -= (neutrals->Fperp*vort + Grad_perp_dot_Grad_perp(neutrals->Fperp, phi)/B2)/n;
+      vorticity_equation["neutral_friction"] =
+        - (neutrals->Fperp*vort + Grad_perp_dot_Grad_perp(neutrals->Fperp, phi)/B2)/n;
     }
     else {
-      ddt(vort) -= neutrals->Fperp*vort/n + Grad_perp_dot_Grad_perp(neutrals->Fperp/n, phi)*n/B2;
+      vorticity_equation["neutral_friction"] =
+        - neutrals->Fperp*vort/n - Grad_perp_dot_Grad_perp(neutrals->Fperp/n, phi)*n/B2;
     }
 
     if (!isothermal) {
-      ddt(logp) -= Tcoef*neutrals->Rp;
+      electron_pressure_equation["neutral_radiation"] = - Tcoef*neutrals->Rp;
     }
 
   }

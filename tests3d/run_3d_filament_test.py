@@ -40,7 +40,7 @@ executable = "../../storm3d/storm"
 # x-boundary cells are not set or used for these variables, so don't check them
 noXBoundaryVariables = ['qpar', 'chiU', 'chiV']
 # y-boundary cells are not set or used for these variables, so don't check them
-noYBoundaryVariables = ['uE2', 'chiU', 'chiV']
+noYBoundaryVariables = ['n', 'T', 'uE2', 'chiU', 'chiV']
 
 def test(numProcs,retestOutput=False):
 

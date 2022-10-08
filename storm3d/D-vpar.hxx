@@ -7,12 +7,13 @@
 #define __NEUTRAL_DVPAR_H__
 
 #include "neutral-model.hxx"
+#include "../shared/BoutEquation/equation.hxx"
 #include <invert_laplace.hxx>
 #include <interpolation.hxx>
 
 class NeutralDVpar : public NeutralModel {
 public:
-  NeutralDVpar(Solver *solver, Options &options);
+  NeutralDVpar(Solver *solver, Options &options, Datafile &dump);
   ~NeutralDVpar() {}
 
   /// Update plasma quantities
@@ -27,6 +28,12 @@ public:
  
   void precon(BoutReal t, BoutReal gamma, BoutReal delta); 
 private:
+  int rhs_counter = 0;
+  Equation neutral_density_equation{lognn, "lognn", Options::root()["save_equations"],
+                                    dump, rhs_counter};
+  Equation neutral_momentum_equation{nvn, "nvn", Options::root()["save_equations"], dump,
+                                     rhs_counter};
+
   Field3D nn, nvn;
   Field3D Tn;
   Field3D lognn;

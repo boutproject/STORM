@@ -24,10 +24,20 @@ else
   $(error "The 'make.config' file does not exist. You must create it for STORM to compile. See the example in 'make.config.example'")
 endif
 
-SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/fast_output.cxx neutral-rates.cxx D-vpar.cxx neutral-model.cxx
+SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/fast_output.cxx ../shared/BoutEquation/equation.cxx neutral-rates.cxx D-vpar.cxx neutral-model.cxx
 TARGET = storm
 
-GIT_VERSION := $(shell git describe --abbrev=40 --dirty --always --tags)
-CXXFLAGS += -DSTORM_VERSION=\"$(GIT_VERSION)\"
+save_git_version_status := $(shell ../build_tools/save_git_version.py)
+ifeq ($(save_git_version_status), 11)
+  $(error "gitpython not installed. You can install with 'conda install gitpython' or 'pip3 install --user gitpython'")
+endif
+ifeq ($(save_git_version_status), 12)
+  $(error "save_git_version.py failed to find a delimiter that is not in the git diff")
+endif
+ifneq ($(save_git_version_status), 0)
+  $(error "save_git_version.py failed with an unrecognised error $(save_git_version_status)")
+endif
+
+$(shell [ -e storm.o ] && rm storm.o)
 
 include $(BOUT_TOP)/make.config

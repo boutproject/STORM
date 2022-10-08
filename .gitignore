@@ -59,8 +59,9 @@ BOUT.settings
 *.bmp
 *.pdf
 
-storm3d/storm
-*/make.config
+make.config
+*storm
 data_*
 *.txt
 storm2d/storm2d
+storm3d/storm_version.hxx

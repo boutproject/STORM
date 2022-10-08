@@ -32,243 +32,241 @@ int i, j, k ;
 // Read and assign values here so that the default is taken as an explicitly set value, so
 // it won't be replaced by a different default later.
 void STORM::setBoundaryConditionsOptions() {
-  auto& opt = *globalOptions;
-
   // density
   if (!average_radial_boundaries_core_SOL) {
-    opt["logn"]["bndry_xin"] = opt["logn"]["bndry_xin"].withDefault("neumann_o2");
-    opt["logn"]["bndry_xout"] = opt["logn"]["bndry_xout"].withDefault("neumann_o2");
+    globalOptions["logn"]["bndry_xin"] = globalOptions["logn"]["bndry_xin"].withDefault("neumann_o2");
+    globalOptions["logn"]["bndry_xout"] = globalOptions["logn"]["bndry_xout"].withDefault("neumann_o2");
   } else {
-    opt["logn"]["bndry_xin"] = opt["logn"]["bndry_xin"].withDefault("none");
-    opt["logn"]["bndry_xout"] = opt["logn"]["bndry_xout"].withDefault("none");
+    globalOptions["logn"]["bndry_xin"] = globalOptions["logn"]["bndry_xin"].withDefault("none");
+    globalOptions["logn"]["bndry_xout"] = globalOptions["logn"]["bndry_xout"].withDefault("none");
   }
   // y-boundary guard cells only used from n_aligned
-  opt["logn"]["bndry_ydown"] = opt["logn"]["bndry_ydown"].withDefault("none");
-  opt["logn"]["bndry_yup"] = opt["logn"]["bndry_yup"].withDefault("none");
+  globalOptions["logn"]["bndry_ydown"] = globalOptions["logn"]["bndry_ydown"].withDefault("none");
+  globalOptions["logn"]["bndry_yup"] = globalOptions["logn"]["bndry_yup"].withDefault("none");
 
   // x-boundary guard cells of n_aligned not used
-  opt["logn_aligned"]["bndry_xin"] = opt["logn_aligned"]["bndry_xin"].withDefault("none");
-  opt["logn_aligned"]["bndry_xout"] = opt["logn_aligned"]["bndry_xout"].withDefault("none");
+  globalOptions["logn_aligned"]["bndry_xin"] = globalOptions["logn_aligned"]["bndry_xin"].withDefault("none");
+  globalOptions["logn_aligned"]["bndry_xout"] = globalOptions["logn_aligned"]["bndry_xout"].withDefault("none");
   if (symmetry_plane) {
-    opt["logn_aligned"]["bndry_ydown"] = opt["logn_aligned"]["bndry_ydown"].withDefault("neumann_o2");
+    globalOptions["logn_aligned"]["bndry_ydown"] = globalOptions["logn_aligned"]["bndry_ydown"].withDefault("neumann_o2");
   } else {
-    opt["logn_aligned"]["bndry_ydown"] = opt["logn_aligned"]["bndry_ydown"].withDefault("free_o3");
+    globalOptions["logn_aligned"]["bndry_ydown"] = globalOptions["logn_aligned"]["bndry_ydown"].withDefault("free_o3");
   }
-  opt["logn_aligned"]["bndry_yup"] = opt["logn_aligned"]["bndry_yup"].withDefault("free_o3");
+  globalOptions["logn_aligned"]["bndry_yup"] = globalOptions["logn_aligned"]["bndry_yup"].withDefault("free_o3");
 
   // vorticity
   if (!average_radial_boundaries_core_SOL) {
-    opt["vort"]["bndry_xin"] = opt["vort"]["bndry_xin"].withDefault("neumann_o2");
-    opt["vort"]["bndry_xout"] = opt["vort"]["bndry_xout"].withDefault("neumann_o2");
+    globalOptions["vort"]["bndry_xin"] = globalOptions["vort"]["bndry_xin"].withDefault("neumann_o2");
+    globalOptions["vort"]["bndry_xout"] = globalOptions["vort"]["bndry_xout"].withDefault("neumann_o2");
   } else {
-    opt["vort"]["bndry_xin"] = opt["vort"]["bndry_xin"].withDefault("none");
-    opt["vort"]["bndry_xout"] = opt["vort"]["bndry_xout"].withDefault("none");
+    globalOptions["vort"]["bndry_xin"] = globalOptions["vort"]["bndry_xin"].withDefault("none");
+    globalOptions["vort"]["bndry_xout"] = globalOptions["vort"]["bndry_xout"].withDefault("none");
   }
   // y-boundary guard cells only used from vort_aligned
-  opt["vort"]["bndry_ydown"] = opt["vort"]["bndry_ydown"].withDefault("none");
-  opt["vort"]["bndry_yup"] = opt["vort"]["bndry_yup"].withDefault("none");
+  globalOptions["vort"]["bndry_ydown"] = globalOptions["vort"]["bndry_ydown"].withDefault("none");
+  globalOptions["vort"]["bndry_yup"] = globalOptions["vort"]["bndry_yup"].withDefault("none");
 
   // x-boundary guard cells of vort_aligned not used
-  opt["vort_aligned"]["bndry_xin"] = opt["vort_aligned"]["bndry_xin"].withDefault("none");
-  opt["vort_aligned"]["bndry_xout"] = opt["vort_aligned"]["bndry_xout"].withDefault("none");
+  globalOptions["vort_aligned"]["bndry_xin"] = globalOptions["vort_aligned"]["bndry_xin"].withDefault("none");
+  globalOptions["vort_aligned"]["bndry_xout"] = globalOptions["vort_aligned"]["bndry_xout"].withDefault("none");
   if (symmetry_plane) {
-    opt["vort_aligned"]["bndry_ydown"] = opt["vort_aligned"]["bndry_ydown"].withDefault("neumann_o2");
+    globalOptions["vort_aligned"]["bndry_ydown"] = globalOptions["vort_aligned"]["bndry_ydown"].withDefault("neumann_o2");
   } else {
-    opt["vort_aligned"]["bndry_ydown"] = opt["vort_aligned"]["bndry_ydown"].withDefault("free_o3");
+    globalOptions["vort_aligned"]["bndry_ydown"] = globalOptions["vort_aligned"]["bndry_ydown"].withDefault("free_o3");
   }
-  opt["vort_aligned"]["bndry_yup"] = opt["vort_aligned"]["bndry_yup"].withDefault("free_o3");
+  globalOptions["vort_aligned"]["bndry_yup"] = globalOptions["vort_aligned"]["bndry_yup"].withDefault("free_o3");
 
   // electrostatic potential
   // x-boundary guard cells set by Laplacian solver
-  opt["phi"]["bndry_xin"] = opt["phi"]["bndry_xin"].withDefault("none");
-  opt["phi"]["bndry_xout"] = opt["phi"]["bndry_xout"].withDefault("none");
+  globalOptions["phi"]["bndry_xin"] = globalOptions["phi"]["bndry_xin"].withDefault("none");
+  globalOptions["phi"]["bndry_xout"] = globalOptions["phi"]["bndry_xout"].withDefault("none");
   // y-boundary guard cells only used from phi_aligned
-  opt["phi"]["bndry_ydown"] = opt["phi"]["bndry_ydown"].withDefault("none");
-  opt["phi"]["bndry_yup"] = opt["phi"]["bndry_yup"].withDefault("none");
+  globalOptions["phi"]["bndry_ydown"] = globalOptions["phi"]["bndry_ydown"].withDefault("none");
+  globalOptions["phi"]["bndry_yup"] = globalOptions["phi"]["bndry_yup"].withDefault("none");
 
   // x-boundary guard cells of phi_aligned not used
-  opt["phi_aligned"]["bndry_xin"] = opt["phi_aligned"]["bndry_xin"].withDefault("none");
-  opt["phi_aligned"]["bndry_xout"] = opt["phi_aligned"]["bndry_xout"].withDefault("none");
+  globalOptions["phi_aligned"]["bndry_xin"] = globalOptions["phi_aligned"]["bndry_xin"].withDefault("none");
+  globalOptions["phi_aligned"]["bndry_xout"] = globalOptions["phi_aligned"]["bndry_xout"].withDefault("none");
   if (symmetry_plane) {
-    opt["phi_aligned"]["bndry_ydown"] = opt["phi_aligned"]["bndry_ydown"].withDefault("neumann_o2");
+    globalOptions["phi_aligned"]["bndry_ydown"] = globalOptions["phi_aligned"]["bndry_ydown"].withDefault("neumann_o2");
   } else {
-    opt["phi_aligned"]["bndry_ydown"] = opt["phi_aligned"]["bndry_ydown"].withDefault("free_o3");
+    globalOptions["phi_aligned"]["bndry_ydown"] = globalOptions["phi_aligned"]["bndry_ydown"].withDefault("free_o3");
   }
-  opt["phi_aligned"]["bndry_yup"] = opt["phi_aligned"]["bndry_yup"].withDefault("free_o3");
+  globalOptions["phi_aligned"]["bndry_yup"] = globalOptions["phi_aligned"]["bndry_yup"].withDefault("free_o3");
 
   if (run_1d) {
     // Not enough x-points to use free_o3 boundary conditions, so use neumann instead
-    opt["phi_stag"]["bndry_xin"] = opt["phi_stag"]["bndry_xin"].withDefault("neumann_o2");
-    opt["phi_stag"]["bndry_xout"] = opt["phi_stag"]["bndry_xout"].withDefault("neumann_o2");
+    globalOptions["phi_stag"]["bndry_xin"] = globalOptions["phi_stag"]["bndry_xin"].withDefault("neumann_o2");
+    globalOptions["phi_stag"]["bndry_xout"] = globalOptions["phi_stag"]["bndry_xout"].withDefault("neumann_o2");
   } else {
-    opt["phi_stag"]["bndry_xin"] = opt["phi_stag"]["bndry_xin"].withDefault("free_o3");
-    opt["phi_stag"]["bndry_xout"] = opt["phi_stag"]["bndry_xout"].withDefault("free_o3");
+    globalOptions["phi_stag"]["bndry_xin"] = globalOptions["phi_stag"]["bndry_xin"].withDefault("free_o3");
+    globalOptions["phi_stag"]["bndry_xout"] = globalOptions["phi_stag"]["bndry_xout"].withDefault("free_o3");
   }
   // y-boundary guard cells not used
-  opt["phi_stag"]["bndry_ydown"] = opt["phi_stag"]["bndry_ydown"].withDefault("none");
-  opt["phi_stag"]["bndry_yup"] = opt["phi_stag"]["bndry_yup"].withDefault("none");
+  globalOptions["phi_stag"]["bndry_ydown"] = globalOptions["phi_stag"]["bndry_ydown"].withDefault("none");
+  globalOptions["phi_stag"]["bndry_yup"] = globalOptions["phi_stag"]["bndry_yup"].withDefault("none");
 
   // electron temperature
   if (!isothermal) {
     if (!average_radial_boundaries_core_SOL) {
-      opt["logp"]["bndry_xin"] = opt["logp"]["bndry_xin"].withDefault("neumann_o2");
-      opt["logp"]["bndry_xout"] = opt["logp"]["bndry_xout"].withDefault("neumann_o2");
+      globalOptions["logp"]["bndry_xin"] = globalOptions["logp"]["bndry_xin"].withDefault("neumann_o2");
+      globalOptions["logp"]["bndry_xout"] = globalOptions["logp"]["bndry_xout"].withDefault("neumann_o2");
     } else {
-      opt["logp"]["bndry_xin"] = opt["logp"]["bndry_xin"].withDefault("none");
-      opt["logp"]["bndry_xout"] = opt["logp"]["bndry_xout"].withDefault("none");
+      globalOptions["logp"]["bndry_xin"] = globalOptions["logp"]["bndry_xin"].withDefault("none");
+      globalOptions["logp"]["bndry_xout"] = globalOptions["logp"]["bndry_xout"].withDefault("none");
     }
     // y-boundary guard cells only used from T_aligned
-    opt["logp"]["bndry_ydown"] = opt["logp"]["bndry_ydown"].withDefault("none");
-    opt["logp"]["bndry_yup"] = opt["logp"]["bndry_yup"].withDefault("none");
+    globalOptions["logp"]["bndry_ydown"] = globalOptions["logp"]["bndry_ydown"].withDefault("none");
+    globalOptions["logp"]["bndry_yup"] = globalOptions["logp"]["bndry_yup"].withDefault("none");
 
     // x-boundary guard cells of T_aligned not used
-    opt["logT_aligned"]["bndry_xin"] = opt["logT_aligned"]["bndry_xin"].withDefault("none");
-    opt["logT_aligned"]["bndry_xout"] = opt["logT_aligned"]["bndry_xout"].withDefault("none");
+    globalOptions["logT_aligned"]["bndry_xin"] = globalOptions["logT_aligned"]["bndry_xin"].withDefault("none");
+    globalOptions["logT_aligned"]["bndry_xout"] = globalOptions["logT_aligned"]["bndry_xout"].withDefault("none");
     if (symmetry_plane) {
-      opt["logT_aligned"]["bndry_ydown"] = opt["logT_aligned"]["bndry_ydown"].withDefault("neumann_o2");
+      globalOptions["logT_aligned"]["bndry_ydown"] = globalOptions["logT_aligned"]["bndry_ydown"].withDefault("neumann_o2");
     } else {
-      opt["logT_aligned"]["bndry_ydown"] = opt["logT_aligned"]["bndry_ydown"].withDefault("free_o3");
+      globalOptions["logT_aligned"]["bndry_ydown"] = globalOptions["logT_aligned"]["bndry_ydown"].withDefault("free_o3");
     }
-    opt["logT_aligned"]["bndry_yup"] = opt["logT_aligned"]["bndry_yup"].withDefault("free_o3");
+    globalOptions["logT_aligned"]["bndry_yup"] = globalOptions["logT_aligned"]["bndry_yup"].withDefault("free_o3");
   }
 
   // ion velocity
   if (!average_radial_boundaries_core_SOL) {
-    opt["U"]["bndry_xin"] = opt["U"]["bndry_xin"].withDefault("neumann_o2");
-    opt["U"]["bndry_xout"] = opt["U"]["bndry_xout"].withDefault("neumann_o2");
+    globalOptions["U"]["bndry_xin"] = globalOptions["U"]["bndry_xin"].withDefault("neumann_o2");
+    globalOptions["U"]["bndry_xout"] = globalOptions["U"]["bndry_xout"].withDefault("neumann_o2");
   } else {
-    opt["U"]["bndry_xin"] = opt["U"]["bndry_xin"].withDefault("none");
-    opt["U"]["bndry_xout"] = opt["U"]["bndry_xout"].withDefault("none");
+    globalOptions["U"]["bndry_xin"] = globalOptions["U"]["bndry_xin"].withDefault("none");
+    globalOptions["U"]["bndry_xout"] = globalOptions["U"]["bndry_xout"].withDefault("none");
   }
   // y-boundary guard cells only used from U_aligned
-  opt["U"]["bndry_ydown"] = opt["U"]["bndry_ydown"].withDefault("none");
-  opt["U"]["bndry_yup"] = opt["U"]["bndry_yup"].withDefault("none");
+  globalOptions["U"]["bndry_ydown"] = globalOptions["U"]["bndry_ydown"].withDefault("none");
+  globalOptions["U"]["bndry_yup"] = globalOptions["U"]["bndry_yup"].withDefault("none");
 
   // x-boundary guard cells of U_aligned not used
-  opt["U_aligned"]["bndry_xin"] = opt["U_aligned"]["bndry_xin"].withDefault("none");
-  opt["U_aligned"]["bndry_xout"] = opt["U_aligned"]["bndry_xout"].withDefault("none");
+  globalOptions["U_aligned"]["bndry_xin"] = globalOptions["U_aligned"]["bndry_xin"].withDefault("none");
+  globalOptions["U_aligned"]["bndry_xout"] = globalOptions["U_aligned"]["bndry_xout"].withDefault("none");
   if (symmetry_plane) {
-    opt["U_aligned"]["bndry_ydown"] = opt["U_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
+    globalOptions["U_aligned"]["bndry_ydown"] = globalOptions["U_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
   } else {
     // y-boundary guard cells set by sheath boundary conditions function
-    opt["U_aligned"]["bndry_ydown"] = opt["U_aligned"]["bndry_ydown"].withDefault("none");
+    globalOptions["U_aligned"]["bndry_ydown"] = globalOptions["U_aligned"]["bndry_ydown"].withDefault("none");
   }
   // y-boundary guard cells set by sheath boundary conditions function
-  opt["U_aligned"]["bndry_yup"] = opt["U_aligned"]["bndry_yup"].withDefault("none");
+  globalOptions["U_aligned"]["bndry_yup"] = globalOptions["U_aligned"]["bndry_yup"].withDefault("none");
 
   // electron velocity
   if (!average_radial_boundaries_core_SOL) {
-    opt["V"]["bndry_xin"] = opt["V"]["bndry_xin"].withDefault("neumann_o2");
-    opt["V"]["bndry_xout"] = opt["V"]["bndry_xout"].withDefault("neumann_o2");
+    globalOptions["V"]["bndry_xin"] = globalOptions["V"]["bndry_xin"].withDefault("neumann_o2");
+    globalOptions["V"]["bndry_xout"] = globalOptions["V"]["bndry_xout"].withDefault("neumann_o2");
   } else {
-    opt["V"]["bndry_xin"] = opt["V"]["bndry_xin"].withDefault("none");
-    opt["V"]["bndry_xout"] = opt["V"]["bndry_xout"].withDefault("none");
+    globalOptions["V"]["bndry_xin"] = globalOptions["V"]["bndry_xin"].withDefault("none");
+    globalOptions["V"]["bndry_xout"] = globalOptions["V"]["bndry_xout"].withDefault("none");
   }
   // y-boundary guard cells only used from V_aligned
-  opt["V"]["bndry_ydown"] = opt["V"]["bndry_ydown"].withDefault("none");
-  opt["V"]["bndry_yup"] = opt["V"]["bndry_yup"].withDefault("none");
+  globalOptions["V"]["bndry_ydown"] = globalOptions["V"]["bndry_ydown"].withDefault("none");
+  globalOptions["V"]["bndry_yup"] = globalOptions["V"]["bndry_yup"].withDefault("none");
 
   // x-boundary guard cells of V_aligned not used
-  opt["V_aligned"]["bndry_xin"] = opt["V_aligned"]["bndry_xin"].withDefault("none");
-  opt["V_aligned"]["bndry_xout"] = opt["V_aligned"]["bndry_xout"].withDefault("none");
+  globalOptions["V_aligned"]["bndry_xin"] = globalOptions["V_aligned"]["bndry_xin"].withDefault("none");
+  globalOptions["V_aligned"]["bndry_xout"] = globalOptions["V_aligned"]["bndry_xout"].withDefault("none");
   if (symmetry_plane) {
-    opt["V_aligned"]["bndry_ydown"] = opt["V_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
+    globalOptions["V_aligned"]["bndry_ydown"] = globalOptions["V_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
   } else {
     // y-boundary guard cells set by sheath boundary conditions function
-    opt["V_aligned"]["bndry_ydown"] = opt["V_aligned"]["bndry_ydown"].withDefault("none");
+    globalOptions["V_aligned"]["bndry_ydown"] = globalOptions["V_aligned"]["bndry_ydown"].withDefault("none");
   }
   // y-boundary guard cells set by sheath boundary conditions function
-  opt["V_aligned"]["bndry_yup"] = opt["V_aligned"]["bndry_yup"].withDefault("none");
+  globalOptions["V_aligned"]["bndry_yup"] = globalOptions["V_aligned"]["bndry_yup"].withDefault("none");
 
   // chiU and chiV do not need boundary conditions - we never take derivatives
   // of either of them, only of psi, U and V
-  opt["chiU"]["bndry_xin"] = opt["chiU"]["bndry_xin"].withDefault("none");
-  opt["chiU"]["bndry_xout"] = opt["chiU"]["bndry_xout"].withDefault("none");
-  opt["chiU"]["bndry_ydown"] = opt["chiU"]["bndry_ydown"].withDefault("none");
-  opt["chiU"]["bndry_yup"] = opt["chiU"]["bndry_yup"].withDefault("none");
-  opt["chiV"]["bndry_xin"] = opt["chiV"]["bndry_xin"].withDefault("none");
-  opt["chiV"]["bndry_xout"] = opt["chiV"]["bndry_xout"].withDefault("none");
-  opt["chiV"]["bndry_ydown"] = opt["chiV"]["bndry_ydown"].withDefault("none");
-  opt["chiV"]["bndry_yup"] = opt["chiV"]["bndry_yup"].withDefault("none");
+  globalOptions["chiU"]["bndry_xin"] = globalOptions["chiU"]["bndry_xin"].withDefault("none");
+  globalOptions["chiU"]["bndry_xout"] = globalOptions["chiU"]["bndry_xout"].withDefault("none");
+  globalOptions["chiU"]["bndry_ydown"] = globalOptions["chiU"]["bndry_ydown"].withDefault("none");
+  globalOptions["chiU"]["bndry_yup"] = globalOptions["chiU"]["bndry_yup"].withDefault("none");
+  globalOptions["chiV"]["bndry_xin"] = globalOptions["chiV"]["bndry_xin"].withDefault("none");
+  globalOptions["chiV"]["bndry_xout"] = globalOptions["chiV"]["bndry_xout"].withDefault("none");
+  globalOptions["chiV"]["bndry_ydown"] = globalOptions["chiV"]["bndry_ydown"].withDefault("none");
+  globalOptions["chiV"]["bndry_yup"] = globalOptions["chiV"]["bndry_yup"].withDefault("none");
 
   // electron parallel heat flux
   // x-boundaries are not needed
   if (!isothermal) {
-    opt["qpar_aligned"]["bndry_xin"] = opt["qpar_aligned"]["bndry_xin"].withDefault("none");
-    opt["qpar_aligned"]["bndry_xout"] = opt["qpar_aligned"]["bndry_xout"].withDefault("none");
+    globalOptions["qpar_aligned"]["bndry_xin"] = globalOptions["qpar_aligned"]["bndry_xin"].withDefault("none");
+    globalOptions["qpar_aligned"]["bndry_xout"] = globalOptions["qpar_aligned"]["bndry_xout"].withDefault("none");
     if (symmetry_plane) {
-      opt["qpar_aligned"]["bndry_ydown"] = opt["qpar_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
+      globalOptions["qpar_aligned"]["bndry_ydown"] = globalOptions["qpar_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
     } else {
       // y-boundary guard cells set by sheath boundary conditions function
-      opt["qpar_aligned"]["bndry_ydown"] = opt["qpar_aligned"]["bndry_ydown"].withDefault("none");
+      globalOptions["qpar_aligned"]["bndry_ydown"] = globalOptions["qpar_aligned"]["bndry_ydown"].withDefault("none");
     }
     // y-boundary guard cells set by sheath boundary conditions function
-    opt["qpar_aligned"]["bndry_yup"] = opt["qpar_aligned"]["bndry_yup"].withDefault("none");
+    globalOptions["qpar_aligned"]["bndry_yup"] = globalOptions["qpar_aligned"]["bndry_yup"].withDefault("none");
   }
   if (electromagnetic && !isothermal) {
-    opt["qpar_centre"]["bndry_xin"] = opt["qpar_centre"]["bndry_xin"].withDefault("neumann_o2");
-    opt["qpar_centre"]["bndry_xout"] = opt["qpar_centre"]["bndry_xout"].withDefault("neumann_o2");
+    globalOptions["qpar_centre"]["bndry_xin"] = globalOptions["qpar_centre"]["bndry_xin"].withDefault("neumann_o2");
+    globalOptions["qpar_centre"]["bndry_xout"] = globalOptions["qpar_centre"]["bndry_xout"].withDefault("neumann_o2");
     // y-boundaries not needed
-    opt["qpar_centre"]["bndry_ydown"] = opt["qpar_centre"]["bndry_ydown"].withDefault("none");
-    opt["qpar_centre"]["bndry_yup"] = opt["qpar_centre"]["bndry_yup"].withDefault("none");
+    globalOptions["qpar_centre"]["bndry_ydown"] = globalOptions["qpar_centre"]["bndry_ydown"].withDefault("none");
+    globalOptions["qpar_centre"]["bndry_yup"] = globalOptions["qpar_centre"]["bndry_yup"].withDefault("none");
   }
 
   // ExB speed squared
   if (boussinesq == 0) {
     if (run_1d) {
       // Not enough x-points to use free_o3 boundary conditions, so use neumann instead
-      opt["uE2"]["bndry_xin"] = opt["uE2"]["bndry_xin"].withDefault("neumann_o2");
-      opt["uE2"]["bndry_xout"] = opt["uE2"]["bndry_xout"].withDefault("neumann_o2");
+      globalOptions["uE2"]["bndry_xin"] = globalOptions["uE2"]["bndry_xin"].withDefault("neumann_o2");
+      globalOptions["uE2"]["bndry_xout"] = globalOptions["uE2"]["bndry_xout"].withDefault("neumann_o2");
     } else {
-      opt["uE2"]["bndry_xin"] = opt["uE2"]["bndry_xin"].withDefault("free_o3");
-      opt["uE2"]["bndry_xout"] = opt["uE2"]["bndry_xout"].withDefault("free_o3");
+      globalOptions["uE2"]["bndry_xin"] = globalOptions["uE2"]["bndry_xin"].withDefault("free_o3");
+      globalOptions["uE2"]["bndry_xout"] = globalOptions["uE2"]["bndry_xout"].withDefault("free_o3");
     }
-    opt["uE2"]["bndry_ydown"] = opt["uE2"]["bndry_ydown"].withDefault("none");
-    opt["uE2"]["bndry_yup"] = opt["uE2"]["bndry_yup"].withDefault("none");
+    globalOptions["uE2"]["bndry_ydown"] = globalOptions["uE2"]["bndry_ydown"].withDefault("none");
+    globalOptions["uE2"]["bndry_yup"] = globalOptions["uE2"]["bndry_yup"].withDefault("none");
   }
 
   // parallel component of magnetic vector potential
   if (electromagnetic) {
     // x-boundary guard cells set by Laplacian solver
-    opt["psi"]["bndry_xin"] = opt["psi"]["bndry_xin"].withDefault("none");
-    opt["psi"]["bndry_xout"] = opt["psi"]["bndry_xout"].withDefault("none");
+    globalOptions["psi"]["bndry_xin"] = globalOptions["psi"]["bndry_xin"].withDefault("none");
+    globalOptions["psi"]["bndry_xout"] = globalOptions["psi"]["bndry_xout"].withDefault("none");
     // y-boundary guard cells only used from psi_aligned
-    opt["psi"]["bndry_ydown"] = opt["psi"]["bndry_ydown"].withDefault("none");
-    opt["psi"]["bndry_yup"] = opt["psi"]["bndry_yup"].withDefault("none");
+    globalOptions["psi"]["bndry_ydown"] = globalOptions["psi"]["bndry_ydown"].withDefault("none");
+    globalOptions["psi"]["bndry_yup"] = globalOptions["psi"]["bndry_yup"].withDefault("none");
 
     // x-boundary guard cells of psi_aligned not used
-    opt["psi_aligned"]["bndry_xin"] = opt["psi_aligned"]["bndry_xin"].withDefault("none");
-    opt["psi_aligned"]["bndry_xout"] = opt["psi_aligned"]["bndry_xout"].withDefault("none");
+    globalOptions["psi_aligned"]["bndry_xin"] = globalOptions["psi_aligned"]["bndry_xin"].withDefault("none");
+    globalOptions["psi_aligned"]["bndry_xout"] = globalOptions["psi_aligned"]["bndry_xout"].withDefault("none");
     if (symmetry_plane) {
-      opt["psi_aligned"]["bndry_ydown"] =
-        opt["psi_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
+      globalOptions["psi_aligned"]["bndry_ydown"] =
+        globalOptions["psi_aligned"]["bndry_ydown"].withDefault("dirichlet_o2");
     } else {
       if (!use_psi_boundary_solver) {
-        opt["psi_aligned"]["bndry_ydown"] =
-          opt["psi_aligned"]["bndry_ydown"].withDefault("free_o3");
+        globalOptions["psi_aligned"]["bndry_ydown"] =
+          globalOptions["psi_aligned"]["bndry_ydown"].withDefault("free_o3");
       } else {
         // y-boundary guard cells set by sheath boundary conditions function
-        opt["psi_aligned"]["bndry_ydown"] =
-          opt["psi_aligned"]["bndry_ydown"].withDefault("none");
+        globalOptions["psi_aligned"]["bndry_ydown"] =
+          globalOptions["psi_aligned"]["bndry_ydown"].withDefault("none");
       }
     }
     if (!use_psi_boundary_solver) {
-      opt["psi_aligned"]["bndry_yup"] =
-        opt["psi_aligned"]["bndry_yup"].withDefault("free_o3");
+      globalOptions["psi_aligned"]["bndry_yup"] =
+        globalOptions["psi_aligned"]["bndry_yup"].withDefault("free_o3");
     } else {
       // y-boundary guard cells set by sheath boundary conditions function
-      opt["psi_aligned"]["bndry_yup"] =
-        opt["psi_aligned"]["bndry_yup"].withDefault("none");
+      globalOptions["psi_aligned"]["bndry_yup"] =
+        globalOptions["psi_aligned"]["bndry_yup"].withDefault("none");
     }
 
-    opt["psi_centre"]["bndry_xin"] =
-      opt["psi_centre"]["bndry_xin"].withDefault("dirichlet_o2");
-    opt["psi_centre"]["bndry_xout"] =
-      opt["psi_centre"]["bndry_xout"].withDefault("dirichlet_o2");
+    globalOptions["psi_centre"]["bndry_xin"] =
+      globalOptions["psi_centre"]["bndry_xin"].withDefault("dirichlet_o2");
+    globalOptions["psi_centre"]["bndry_xout"] =
+      globalOptions["psi_centre"]["bndry_xout"].withDefault("dirichlet_o2");
     // y-boundary guard cells not needed
-    opt["psi_centre"]["bndry_ydown"] =
-      opt["psi_centre"]["bndry_ydown"].withDefault("none");
-    opt["psi_centre"]["bndry_yup"] = opt["psi_centre"]["bndry_yup"].withDefault("none");
+    globalOptions["psi_centre"]["bndry_ydown"] =
+      globalOptions["psi_centre"]["bndry_ydown"].withDefault("none");
+    globalOptions["psi_centre"]["bndry_yup"] = globalOptions["psi_centre"]["bndry_yup"].withDefault("none");
   }
 }
 
@@ -493,6 +491,9 @@ FieldPerp STORM::extrap_sheath_upper(const Field3D &var){
   ASSERT1(var.getDirectionY() == YDirectionType::Aligned);
   ASSERT1(var.getLocation() == CELL_CENTRE);
 
+  // Should only be called when there is an upper sheath boundary
+  ASSERT1(mesh->hasBndryUpperY());
+
   //3rd order extrapolation of a field to find the sheath value
   FieldPerp result;
   result = 0.375*sliceXZ(var, mesh->yend + 1) + 0.75*sliceXZ(var, mesh->yend) - 0.125*sliceXZ(var, mesh->yend - 1) ;
@@ -505,6 +506,9 @@ FieldPerp STORM::extrap_sheath_upper(const Field3D &var){
 FieldPerp STORM::extrap_sheath_lower(const Field3D &var){
   ASSERT1(var.getDirectionY() == YDirectionType::Aligned);
   ASSERT1(var.getLocation() == CELL_CENTRE);
+
+  // Should only be called when there is a lower sheath boundary
+  ASSERT1(mesh->hasBndryLowerY());
 
   //3rd order extrapolation of a field to find the sheath value
   FieldPerp result;
@@ -523,17 +527,22 @@ FieldPerp STORM::extrap_sheath_lower(const Field3D &var){
 void STORM::phi_bc_initialise(bool restarting){
   bool append;
   OPTION(globalOptions, append, false);
-  if(restarting && append){
+  OPTION(options, reset_evolving_bcs, false);
+  // replicate setting of dump_on_restart from BOUT++'s Solver::solve()
+  bool dump_on_restart;
+  OPTION(globalOptions, dump_on_restart, (not restarting) or (not append));
+  if ((not dump_on_restart) or reset_evolving_bcs) {
+    // Note: always need to increment cstep_SOL, etc. on first step when
+    // reset_evolving_bcs=true to avoid divide-by-zero
     first_step = false;
   }else{
     first_step = true;
   }
 
   // If monitor_timestep == false, the evolving boundary conditions are not working
-  Options* solver_options = globalOptions->getSection("solver");
-  bool monitor_timestep;
-  solver_options->get("monitor_timestep", monitor_timestep, false);
-  if(!monitor_timestep) throw BoutException("Evolving boundary phi: monitor_timstep = false.");
+  Options& solver_options = *globalOptions.getSection("solver");
+  bool monitor_timestep = solver_options["monitor_timestep"].withDefault(false);
+  if(!monitor_timestep) throw BoutException("Evolving boundary phi: monitor_timestep = false.");
 
   restart.add(phi_bc,"phi_bc",0);
   restart.add(time_last_SOL,"time_last_SOL",0);
@@ -542,18 +551,21 @@ void STORM::phi_bc_initialise(bool restarting){
   restart.add(cstep_SOL,"cstep_SOL",0);
   restart.add(cstep_PF,"cstep_PF",0);
   restart.add(cstep_core,"cstep_core",0);
-  if(!restarting){
+  SAVE_REPEAT(phi_bc, time_last_SOL, time_last_PF, time_last_core, cstep_SOL,
+              cstep_PF, cstep_core);
+  if ((not restarting) or reset_evolving_bcs) {
     //Start the simulation from scratch
-    phi_bc = 0.;
+    phi_bc = 0.0;
     time_last_SOL = 0.;
     time_last_PF = 0.;
     time_last_core = 0.;
     cstep_SOL = 0.;
     cstep_PF = 0.;
     cstep_core = 0.;
+    auto phi_dc = DC(phi);
     for(int i = 0; i<mesh->LocalNy; ++i){
-      phi_bc(mesh->xstart,i) = phi(mesh->xstart,i,0);
-      phi_bc(mesh->xend,i)   = phi(mesh->xend,i,0);
+      phi_bc(mesh->xstart,i) = phi_dc(mesh->xstart,i);
+      phi_bc(mesh->xend,i)   = phi_dc(mesh->xend,i);
     }
   }
 }

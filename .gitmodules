@@ -1,0 +1,3 @@
+[submodule "shared/BoutEquation"]
+	path = shared/BoutEquation
+	url = git@github.com:johnomotani/BoutEquation

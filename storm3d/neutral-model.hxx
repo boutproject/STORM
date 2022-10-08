@@ -11,7 +11,7 @@
 
 class NeutralModel {
 public:
-  NeutralModel(Options &options) {
+  NeutralModel(Options &options, Datafile &dump_in) : dump(dump_in) {
 
     // Better to initialize with NaN
     S  = 0.;
@@ -58,7 +58,7 @@ public:
   /*!
    * Creates an instance of NeutralModel, based on given options
    */
-  static NeutralModel* create(Solver *solver, Options &options);
+  static NeutralModel* create(Solver *solver, Options &options, Datafile &dump);
   
   /*!
    * Set normalisations for temperature [eV], density [m^-3], 
@@ -117,6 +117,8 @@ protected:
   void neutral_rates(const Field3D& n, const Field3D& n_stag, const Field3D& U, const Field3D& V, const Field3D& T, const Field3D& T_stag,
                      const Field3D& nn, const Field3D& nn_stag, const Field3D& vn,
                      bool updaterates = true);
+
+  Datafile& dump;
 
 private:
   NeutralModel();
