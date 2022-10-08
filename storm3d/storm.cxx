@@ -404,6 +404,7 @@ int STORM::init(bool restarting) {
   n_stag.setLocation(CELL_YLOW) ;
   S_stag.setLocation(CELL_YLOW) ;
   phi_stag.setLocation(CELL_YLOW) ;  
+  nu_parallel0.setLocation(CELL_YLOW) ;
   nu_parallel.setLocation(CELL_YLOW) ;
   qpar_aligned.setLocation(CELL_YLOW);
   logT_stag.setLocation(CELL_YLOW);
@@ -816,6 +817,12 @@ int STORM::init(bool restarting) {
 
   if (mesh->getGlobalXIndex(mesh->xend) < 60 && mesh->periodicY(mesh->xend) && increased_resistivity_core) {
     nu_parallel0 = 0.1;
+  }
+
+  // Add monitor for printing min, max and mean of evolving variables and their time
+  // derivatives
+  if (monitor_minmaxmean) {
+    solver->addMonitor(&minmaxmean_monitor, MonitorPosition::BACK);
   }
 
   /////////////////////////////////////////////////////////
@@ -1308,8 +1315,6 @@ int STORM::rhs(BoutReal time) {
     if (diff_perp_V > 0.) {
       electron_momentum_equation["perpendicular_diffusion"] = diff_perp_V*Delp2(V);
     }
-
-    set_lower_ddt_zero(chiV) ;
   }
 
   if (!isothermal){
@@ -1365,7 +1370,7 @@ int STORM::rhs(BoutReal time) {
     }
 
     if (S_in_peq) {
-      electron_pressure_equation["S*V^2/3/mu/p"] = S*SQ(V_centre)/(3.*mu*p);
+      electron_pressure_equation["S*V^2_3_mu_p"] = S*SQ(V_centre)/(3.*mu*p);
     }
 
     //Curvature terms for electron temperature

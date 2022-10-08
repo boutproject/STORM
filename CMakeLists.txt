@@ -8,7 +8,7 @@ find_package(bout++
              REQUIRED)
 
 add_executable(storm
-               storm3d/storm.cxx storm3d/boundaries.cxx storm3d/initialise.cxx storm3d/monitors.cxx storm3d/operators.cxx storm3d/utilities.cxx shared/fast_output.cxx shared/BoutEquation/equation.cxx storm3d/neutral-rates.cxx storm3d/D-vpar.cxx storm3d/neutral-model.cxx)
+               storm3d/storm.cxx storm3d/boundaries.cxx storm3d/initialise.cxx storm3d/monitors.cxx storm3d/operators.cxx storm3d/utilities.cxx shared/BoutFastOutput/fast_output.cxx shared/BoutEquation/equation.cxx storm3d/neutral-rates.cxx storm3d/D-vpar.cxx storm3d/neutral-model.cxx)
 
 target_link_libraries(storm
                       PRIVATE bout++::bout++)

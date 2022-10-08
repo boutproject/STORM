@@ -27,8 +27,11 @@ endif
 ifeq ($(wildcard ../shared/BoutEquation/equation.hxx),)
   $(error "BoutEquation header missing - try running `git submodule update --init --recursive`")
 endif
+ifeq ($(wildcard ../shared/BoutFastOutput/fast_output.hxx),)
+  $(error "FastOutput header missing - try running `git submodule update --init --recursive`")
+endif
 
-SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/fast_output.cxx ../shared/BoutEquation/equation.cxx neutral-rates.cxx D-vpar.cxx neutral-model.cxx
+SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/BoutFastOutput/fast_output.cxx ../shared/BoutEquation/equation.cxx neutral-rates.cxx D-vpar.cxx neutral-model.cxx
 TARGET = storm
 
 save_git_version_status := $(shell ../build_tools/save_git_version.py)

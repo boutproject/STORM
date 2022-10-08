@@ -6,7 +6,7 @@
 #include <bout/constants.hxx>
 
 NeutralDVpar::NeutralDVpar(Solver *solver, Options &options, Datafile &dump)
-    : NeutralModel(options, dump), my_output_monitor(this) {
+    : NeutralModel(options, dump), minmaxmean_monitor(*this) {
 
   mesh = bout::globals::mesh;
   coordinates_centre = mesh->getCoordinates(CELL_CENTRE);
@@ -157,7 +157,10 @@ NeutralDVpar::NeutralDVpar(Solver *solver, Options &options, Datafile &dump)
   }
   // Add this object to the global list, so it can be found by timestepmonitor_func
   neutral_dvpar_instances.push_back(this);
-  solver->addMonitor(&my_output_monitor);
+
+  if (monitor_minmaxmean) {
+    solver->addMonitor(&minmaxmean_monitor, MonitorPosition::BACK);
+  }
 }
 
 // 3D model, diffusive in X-Z, fluid in Y
@@ -337,23 +340,6 @@ int NeutralDVpar::timestepmonitor(BoutReal simtime) {
     updaterates = false;
   }
 
-  if( monitor_minmaxmean ) {
-    if(minmaxmean_timelast < 0.){
-      minmaxmean_timelast = simtime;
-    } else if (simtime - minmaxmean_timelast > 5.) {
-      minmaxmean_timelast = simtime;
-      printMinMaxMean();
-    }
-  }
-  
-  return 0;
-}
-
-int NeutralDVpar::OutputMonitor::call(Solver* UNUSED(solver), BoutReal UNUSED(simtime),
-                                      int UNUSED(iter), int UNUSED(NOUT)) {
-  if (neutral_dvpar->monitor_minmaxmean) {
-    neutral_dvpar->printMinMaxMean();
-  }
   return 0;
 }
 
