@@ -42,13 +42,13 @@ int STORM::init(bool restarting) {
   
   coordinates_centre = mesh->getCoordinates(CELL_CENTRE);
   
-  OPTION(options, mu_n0,                  -1.0) ;
-  OPTION(options, mu_vort0,               -1.0) ;
+  OPTION(options, mu_n0_scalar,           -1.0) ;
+  OPTION(options, mu_vort0_scalar,        -1.0) ;
   OPTION(options, mu,                     -1.0) ;
   OPTION(options, nu_parallel0,           -1.0) ;
   OPTION(options, g0,                     -1.0) ;  
   OPTION(options, kappa0,                 -1.0) ;
-  OPTION(options, kappa0_perp,            -1.0) ;
+  OPTION(options, kappa0_perp_scalar,     -1.0) ;
   OPTION(options, diff_perp_U,             -1.) ;
   OPTION(options, diff_perp_V,             -1.) ;
   OPTION(options, beta0,                  -1.0) ;
@@ -99,7 +99,8 @@ int STORM::init(bool restarting) {
   OPTION(options, monitor_minmaxmean,                 false) ;
   OPTION(options, sources_realistic_geometry,         false) ;
   OPTION(options, sources_realisticgeometry_background, false) ;
-  OPTION(options, increased_dissipation_xbndries,     false) ;
+  OPTION(options, increased_dissipation_xbndries,        -1) ;
+  OPTION(options, xbndry_dissipation_factor,            10.) ;
   OPTION(options, increased_resistivity_core,         false) ;
   OPTION(options, normalise_sources, realistic_geometry == "none") ;
 
@@ -192,13 +193,13 @@ int STORM::init(bool restarting) {
   if (nu_parallel0 < 0 ){
     nu_parallel0 = 0.51*nu_ei/Omega_i ; 
   }
-  if(mu_n0 < 0){
-    mu_n0 = (1.0 + 1.3*pow(q, 2))*(1.0 + T_i0/T_e0)*pow(rho_e, 2)*nu_ei ; // Neo-Classical Particle diffusion, m^2s-1
-    mu_n0 = mu_n0/(SQ(rho_s)*Omega_i) ; 
+  if(mu_n0_scalar < 0){
+    mu_n0_scalar = (1.0 + 1.3*pow(q, 2))*(1.0 + T_i0/T_e0)*pow(rho_e, 2)*nu_ei ; // Neo-Classical Particle diffusion, m^2s-1
+    mu_n0_scalar = mu_n0_scalar/(SQ(rho_s)*Omega_i);
   }
-  if(mu_vort0 < 0){
-    mu_vort0 = (1.0 + 1.6*pow(q, 2))*(6.0/8.0)*pow(rho_i, 2)*nu_ii ;      // Neo-Classical Ion viscosity, m^2s-1
-    mu_vort0 = mu_vort0/(SQ(rho_s)*Omega_i) ; 
+  if(mu_vort0_scalar < 0){
+    mu_vort0_scalar = (1.0 + 1.6*pow(q, 2))*(6.0/8.0)*pow(rho_i, 2)*nu_ii ;      // Neo-Classical Ion viscosity, m^2s-1
+    mu_vort0_scalar = mu_vort0_scalar/(SQ(rho_s)*Omega_i);
   }
   if(g0 < 0){
     g0 = 2.0*rho_s/R_c ; 
@@ -208,8 +209,8 @@ int STORM::init(bool restarting) {
     kappa0 = 3.16*(SQ(V_the)/nu_ei)/(SQ(rho_s)*Omega_i);
   }
 
-  if(kappa0_perp < 0 ){
-    kappa0_perp = (1.0 + 1.6*SQ(q))*(4.66)*SQ(rho_e)*nu_ei/(SQ(rho_s)*Omega_i);
+  if(kappa0_perp_scalar < 0 ){
+    kappa0_perp_scalar = (1.0 + 1.6*SQ(q))*(4.66)*SQ(rho_e)*nu_ei/(SQ(rho_s)*Omega_i);
   }
 
   if(beta0 < 0) {
@@ -285,7 +286,11 @@ int STORM::init(bool restarting) {
       coords->g12 *= SQ(rho_s);
       coords->g13 *= SQ(rho_s);
       coords->g23 *= SQ(rho_s);
-      coords->geometry();
+
+      // Pass 'false' argument so we use recalculate_staggered=false, since we
+      // do not want to interpolate the staggered Coordinates from the
+      // CELL_CENTRE ones, in case they were loaded from a grid file.
+      coords->geometry(false);
     }
     if (realistic_geometry != "none") {
       G3 = coordinates_centre->G3;
@@ -312,7 +317,11 @@ int STORM::init(bool restarting) {
       coords->g23 *= SQ(rho_s);
       coords->dx /= SQ(rho_s)*B_0;
       coords->J *= B_0/rho_s;
-      coords->geometry();
+
+      // Pass 'false' argument so we use recalculate_staggered=false, since we
+      // do not want to interpolate the staggered Coordinates from the
+      // CELL_CENTRE ones, in case they were loaded from a grid file.
+      coords->geometry(false);
     }
     B2 = SQ(coordinates_centre->Bxy);
     if (realistic_geometry != "none") {
@@ -464,6 +473,8 @@ int STORM::init(bool restarting) {
     V = chiV;
   }
 
+  SAVE_ONCE(mu_n0, mu_vort0, kappa0_perp, diff_perp_U, diff_perp_V);
+
   if (save_aligned_fields) {
     SAVE_REPEAT5(n_aligned, U_aligned, V_aligned, vort_aligned, phi_aligned);
     if (!isothermal) {
@@ -478,9 +489,30 @@ int STORM::init(bool restarting) {
                         ? *globalOptions.getSection("phiSolver")
                         : *globalOptions.getSection("laplace");
   if (split_n0) {
+    if (!evolving_bcs) {
+      throw BoutException("split_n0 not implemented for evolving_bcs=false!");
+    }
+    if (boussinesq == 0) {
+      throw BoutException("split_n0 not implemented for boussinesq == 0!");
+    }
+
     // Set DC part to zero - this part will be solved by phiSolverxy
     phiOptions["global_flags"] = phiOptions["global_flags"].withDefault(1);
     // keep boundary flags set to 0 (zero-value Dirichlet), which is the BOUT++ default
+
+    auto phixyOptions = globalOptions["laplacexy"];
+    // hypre's algebraic multigrid method is usually the best preconditioner
+    phixyOptions["pctype"] = phixyOptions["pctype"].withDefault("hypre");
+    // Use finite-difference discretisation, instead of default finite-volume one
+    phixyOptions["finite_volume"] = phixyOptions["finite_volume"].withDefault(false);
+
+    phiSolverxy = new LaplaceXY(mesh, &phixyOptions);
+    if (realistic_geometry != "none") {
+      phiSolverxy->setCoefs(1./B2, 0.);
+    }
+    phi2D = 0.;
+    restart.addOnce(phi2D,"phi2D");
+    SAVE_REPEAT(phi2D);
   } else {
     // Set the radial boundary conditions to non-zero Dirichlet, with the value passed
     // in the boundary cells of the 'initial guess'
@@ -707,13 +739,13 @@ int STORM::init(bool restarting) {
   output.write("\n\tloglambda    = %e ", loglambda) ; 
   output.write("\n\tbeta0        = %e ", beta0) ;
   output.write("\nDimensionless Parameters:") ;  
-  output.write("\n\tmu_n0        = %e ", mu_n0) ; 
-  output.write("\n\tmu_vort0     = %e ", mu_vort0) ; 
+  output.write("\n\tmu_n0        = %e ", mu_n0_scalar);
+  output.write("\n\tmu_vort0     = %e ", mu_vort0_scalar);
   output.write("\n\tnu_parallel0 = %e ", nu_parallel0) ; 
   output.write("\n\tg0           = %e ", g0) ; 
   output.write("\n\tmu           = %e ", mu) ;
   output.write("\n\tkappa_par    = %e ", kappa0);
-  output.write("\n\tkappa_perp   = %e ", kappa0_perp);
+  output.write("\n\tkappa_perp   = %e ", kappa0_perp_scalar);
   output.write("\n\tdiff_perp_U  = %e ", diff_perp_U);
   output.write("\n\tdiff_perp_V  = %e ", diff_perp_V);
   output.write("\nDimensionless Lengths:") ;  
@@ -769,13 +801,48 @@ int STORM::init(bool restarting) {
   }
 
   // Increase dissipation near boundaries
-  bool nearboundary = false;
-  if(mesh->firstX()) nearboundary = true;
-  if(mesh->lastX()) nearboundary = true;
-  if(nearboundary && increased_dissipation_xbndries){
-    mu_n0 *= 10.;
-    mu_vort0 *= 10.;
-    kappa0_perp *= 10.;
+  mu_n0 = mu_n0_scalar;
+  mu_vort0 = mu_vort0_scalar;
+  kappa0_perp = kappa0_perp_scalar;
+  if(increased_dissipation_xbndries > 0) {
+    for (int xglobal = mesh->getGlobalXIndex(0);
+         xglobal < increased_dissipation_xbndries + mesh->xstart; xglobal++) {
+
+      int xlocal = mesh->XLOCAL(xglobal);
+      for (int y = 0; y < mesh->LocalNy; y++) {
+        mu_n0(xlocal, y) +=
+            BoutReal(increased_dissipation_xbndries + mesh->xstart - xglobal)
+            / BoutReal(increased_dissipation_xbndries)
+            * (xbndry_dissipation_factor - 1.0) * mu_n0_scalar;
+        mu_vort0(xlocal, y) +=
+            BoutReal(increased_dissipation_xbndries + mesh->xstart - xglobal)
+            / BoutReal(increased_dissipation_xbndries)
+            * (xbndry_dissipation_factor - 1.0) * mu_vort0_scalar;
+        kappa0_perp(xlocal, y) +=
+            BoutReal(increased_dissipation_xbndries + mesh->xstart - xglobal)
+            / BoutReal(increased_dissipation_xbndries)
+            * (xbndry_dissipation_factor - 1.0) * kappa0_perp_scalar;
+      }
+    }
+    for (int xglobal = mesh->GlobalNx-increased_dissipation_xbndries-mesh->xstart;
+         xglobal < mesh->getGlobalXIndex(mesh->LocalNx); xglobal++) {
+
+      int xlocal = mesh->XLOCAL(xglobal);
+      for (int y = 0; y < mesh->LocalNy; y++) {
+        mu_n0(xlocal, y) +=
+            BoutReal(increased_dissipation_xbndries + xglobal - (mesh->GlobalNx - mesh->xstart))
+            / BoutReal(increased_dissipation_xbndries)
+            * (xbndry_dissipation_factor - 1.0) * mu_n0_scalar;
+        mu_vort0(xlocal, y) +=
+            BoutReal(increased_dissipation_xbndries + xglobal - (mesh->GlobalNx - mesh->xstart))
+            / BoutReal(increased_dissipation_xbndries)
+            * (xbndry_dissipation_factor - 1.0) * mu_vort0_scalar;
+        kappa0_perp(xlocal, y) +=
+            BoutReal(increased_dissipation_xbndries + xglobal - (mesh->GlobalNx - mesh->xstart))
+            / BoutReal(increased_dissipation_xbndries)
+            * (xbndry_dissipation_factor - 1.0) * kappa0_perp_scalar;
+      }
+    }
   }
 
   if (mesh->getGlobalXIndex(mesh->xend) < 60 && mesh->periodicY(mesh->xend) && increased_resistivity_core) {
@@ -1281,10 +1348,12 @@ int STORM::rhs(BoutReal time) {
 
     //Set heat flux boundary condition
     qpar_aligned.applyBoundary(time);
-    if (!symmetry_plane){
+    if (!symmetry_plane and mesh->hasBndryLowerY()){
       qsheath_ydown_staggered(qpar_aligned, T_sheath_lower, n_sheath_lower, V_sheath_lower, mu);
     }
-    qsheath_yup_staggered(qpar_aligned, T_sheath_upper, n_sheath_upper, V_sheath_upper, mu);
+    if (mesh->hasBndryUpperY()) {
+      qsheath_yup_staggered(qpar_aligned, T_sheath_upper, n_sheath_upper, V_sheath_upper, mu);
+    }
     if (mesh->yend - mesh->ystart + 1 < 3) {
       // Need to communicate mesh->ystart point that has just been set by boundary conditions
       mesh->communicate(qpar_aligned);
@@ -1343,8 +1412,12 @@ int STORM::rhs(BoutReal time) {
     TRACE("Neutral gas model");
    
     // Fluxes at targets for boundary conditions
-    ionflux_lower = abs(n_sheath_lower*U_sheath_lower);
-    ionflux_upper = abs(n_sheath_upper*U_sheath_upper);
+    if (mesh->hasBndryLowerY()) {
+      ionflux_lower = abs(n_sheath_lower*U_sheath_lower);
+    }
+    if (mesh->hasBndryUpperY()) {
+      ionflux_upper = abs(n_sheath_upper*U_sheath_upper);
+    }
     neutrals->setRecycledFlux(ionflux_lower, ionflux_upper);
  
     // Update neutral gas model

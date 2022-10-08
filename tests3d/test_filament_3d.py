@@ -60,7 +60,7 @@ def test_filament_3d(numProcs,retest=False):
         test_time = timedelta(seconds=time.monotonic() - test_start)
 
         numTests = numTests+1
-        if s is not 0:
+        if s != 0:
             numFailures = numFailures+1
             failedTests.append(testdir)
 
@@ -75,7 +75,7 @@ def test_filament_3d(numProcs,retest=False):
 
         print("", flush=True)
 
-    if numFailures is 0:
+    if numFailures == 0:
         print("All "+str(numTests)+" tests passed")
     else:
         print(str(numFailures)+"/"+str(numTests)+" failed.")

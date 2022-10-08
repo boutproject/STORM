@@ -48,12 +48,12 @@ def test_equilib_1d(retest=False, np=1):
         os.chdir(testdir)
         s,out = shell(testcommand,pipe=False)
         numTests = numTests+1
-        if s is not 0:
+        if s != 0:
             numFailures = numFailures+1
             failedTests.append(testdir)
         print("")
 
-    if numFailures is 0:
+    if numFailures == 0:
         print("All tests passed")
     else:
         print(str(numFailures)+"/"+str(numTests)+" failed.")

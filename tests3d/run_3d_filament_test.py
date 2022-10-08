@@ -53,7 +53,7 @@ def test(numProcs,retestOutput=False):
 
     if not retestOutput:
         s = run_test(numProcs)
-        if s is not 0:
+        if s != 0:
             print("Error: simulation run failed")
             return 1,1
 
@@ -73,7 +73,7 @@ def generate_restarts(numProcs):
         nxpe = None
 
     # prepare restart files
-    restart.redistribute(numProcs,nxpe=nxpe,path=os.path.join(runOutputDir,"restart"),output=runOutputDir)
+    restart.redistribute(numProcs,nxpe=nxpe,path=os.path.join(runOutputDir,"restart"),output=runOutputDir, mxg=1, myg=2)
 
 def run_test(numProcs):
     # Run the simulation
@@ -158,15 +158,15 @@ def testfield_slice(data, m_guards, includeXBoundary, includeYBoundary):
     if includeXBoundary:
         # Only test first x-guard cells
         # (because phi only has the first guard cells set)
-        xstart = mxg-1 if mxg-1>0 else None
-        data = data[:,xstart:-xstart,:]
+        xslice = slice(mxg-1, -mxg+1) if mxg - 1 > 0 else slice(None)
+        data = data[:, xslice, :]
     else:
-        xstart = mxg if mxg>0 else None
-        data = data[:,xstart:-xstart,:]
+        xslice = slice(mxg, -mxg) if mxg > 0 else slice(None)
+        data = data[:,xslice,:]
 
     if not includeYBoundary and (ftype == 'Field3D_t' or ftype == 'Field2D_t'):
-        ystart = myg if myg>0 else None
-        data = data[:,:,ystart:-ystart]
+        yslice = slice(myg, -myg) if myg > 0 else slice(None)
+        data = data[:,:,yslice]
 
     return data
 
