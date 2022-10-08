@@ -54,9 +54,12 @@ int STORM::init(bool restarting) {
   OPTION(options, old_phi_wall_value,    false) ;
   
   OPTION(options, isothermal,            false) ;
-  OPTION(options, boussinesq,             true) ;
+  OPTION(options, boussinesq,                1) ; // 0 = no Boussinesq, 1 = standard STORM, 
+                                                  // 2 = Hermes like, 3 = STORM + source term, 4 = STORM - vort*d(logn)/dt
+  OPTION(options, split_n0,              false) ; // split n = 0 component and solve it with laplaceXY
   OPTION(options, electromagnetic,       false) ;
   OPTION(options, uniform_diss_paras,    false) ;
+  OPTION(options, S_in_peq,               true) ;
   OPTION(options, run_1d,                false) ;
   OPTION(options, hydrodynamic,          false) ;
   OPTION(options, symmetry_plane,         true) ;
@@ -77,7 +80,7 @@ int STORM::init(bool restarting) {
   OPTION(options, n_0,                  0.8e19) ;   // m^-3
   OPTION(options, loglambda,                -1) ;   // Dimensionless
   
-  OPTION(options, equilibrium_source, "1d_profiles"); // possible values: 1d_profiles, input_file, profiles_file
+  OPTION(options, equilibrium_source, "1d_profiles"); // possible values: 1d_profiles, input_file, profiles_file, single null, double null
   OPTION(options, equilibrium_file_path, "");
   if (equilibrium_file_path == "") {
     // The user has not explicitly set equilibrium_file_path, use path relative to simulation output directory instead
@@ -89,8 +92,15 @@ int STORM::init(bool restarting) {
   }
   OPTION(options, equilibrium_data_file, "");
 
-  OPTION(options, average_radial_boundaries_core_SOL,            false) ;
-  OPTION(options, increased_dissipation_xbndries,                false) ;
+  OPTION(options, average_radial_boundaries_core_SOL, false) ;
+  OPTION(options, realistic_geometry,                "none") ; // options: none (slab), salpha (circular), singlenull, doublenull
+  OPTION(options, normalise_all,                      false) ;
+  OPTION(options, monitor_minmaxmean,                 false) ;
+  OPTION(options, sources_realistic_geometry,         false) ;
+  OPTION(options, sources_realisticgeometry_background, false) ;
+  OPTION(options, increased_dissipation_xbndries,     false) ;
+  OPTION(options, increased_resistivity_core,         false) ;
+  OPTION(options, normalise_sources,                   true) ;
 
   // Set default values for boundary conditions for all variables.
   // Can be overridden in input file, but should never need to be.
@@ -99,6 +109,7 @@ int STORM::init(bool restarting) {
 
   // Check if we're using ShiftedMetric to run simulation in x-z orthogonal coordinates
   auto& mesh_options = (*globalOptions)["mesh"];
+  isshifted = false;
   if (mesh_options["paralleltransform"] == "shifted") {
     // As we use staggered grids, we must transform to/from field-aligned coordinates
     // rather than using 'parallel slices'. Therefore we don't want to calculate parallel
@@ -109,6 +120,7 @@ int STORM::init(bool restarting) {
           "We don't use parallel slices, so calculating them would be a waste of time. "
           "This option should be set to false.");
     }
+    isshifted = true;
   }
 
   // Load in ixseps
@@ -208,9 +220,52 @@ int STORM::init(bool restarting) {
   Usheath_BC_prefactor = sqrt(1.0/(1.0+(1.0/mu))) ;
   
   // Get from options or calculate Lx, Ly and Lz
-  set_Lx_Ly_Lz();
+  if (realistic_geometry == "none") {
+    set_Lx_Ly_Lz();
+  } else {
+    Lx = NAN;
+    Ly = NAN;
+    Lz = NAN;
+  }
 
   //********* Metric, Bracket scheme and staggering of fields ***********
+  if (isshifted && mesh->LocalNz % 2 == 0 && mesh->yend - mesh->ystart + 1 < 3) {
+    throw BoutException("Shifted coordinates with an even Nz number of points and mesh->yend - mesh->ystart + 1 < 3 is not currently implemented.");
+  }
+
+  if (  realistic_geometry == "salpha"
+     || realistic_geometry == "singlenull"
+     || realistic_geometry == "doublenull") {
+    std::string coordinates_type = "";
+    if (!mesh->get(coordinates_type, "coordinates_type")) {
+      if (coordinates_type != "orthogonal") {
+        throw BoutException("Incorrect coordinate system type for realistic geometry, must be orthogonal.");
+      }
+    } 
+    else {
+      if (!mesh->get(coordinates_type, "parallel_transform")) {
+        if (coordinates_type != "shiftedmetric") {
+          throw BoutException("Incorrect parallel transform type for realistic geometry, must be shiftedmetric.");
+        }
+      }
+      else {
+        throw BoutException("Realistic geometry, but the grid doesn't have coordinates_type nor parallel_transform.");
+      }
+    }
+
+    if (!isshifted) {
+      throw BoutException("Realistic geometry requires shifted parallel transform!.");
+    }
+
+    bxcv.covariant = false; // Read contravariant components
+    GRID_LOAD(bxcv);        // Specified components of b0 x kappaa
+    Curlb_B = 2.*bxcv/coordinates_centre->Bxy;
+    B2 = SQ(coordinates_centre->Bxy);
+    G3 = coordinates_centre->G3;
+  }
+  else if (realistic_geometry != "none") {
+    throw BoutException("realistic_geometry must be either none, salpha, singlenull, or doublenull!");
+  }
 
   // Normalise grid mesh.   
   if (normalise_lengths){
@@ -231,7 +286,50 @@ int STORM::init(bool restarting) {
     //mesh->dy /= rho_s ;
     //mesh->zlength/= rho_s ;
     coordinates_centre->geometry();
+    if (realistic_geometry != "none") {
+      G3 = coordinates_centre->G3;
+    }
   }
+
+  if (normalise_all) {
+    if (normalise_lengths) 
+      throw BoutException("Error: not possible to use normalise_lengths = true and normalise_all = true.");
+    coordinates_centre->Bxy /= B_0;
+    B2 = SQ(coordinates_centre->Bxy);
+    coordinates_centre->g_11 *= SQ(rho_s*B_0) ;
+    coordinates_centre->g_22 /= SQ(rho_s) ;
+    coordinates_centre->g_33 /= SQ(rho_s) ;
+    coordinates_centre->g_12 *= B_0 ;
+    coordinates_centre->g_13 *= B_0 ;
+    coordinates_centre->g_23 /= SQ(rho_s) ;
+    coordinates_centre->g11 /= SQ(rho_s*B_0) ;
+    coordinates_centre->g22 *= SQ(rho_s) ;
+    coordinates_centre->g33 *= SQ(rho_s) ;
+    coordinates_centre->g12 /= B_0 ; 
+    coordinates_centre->g13 /= B_0 ;
+    coordinates_centre->g23 *= SQ(rho_s) ;
+    coordinates_centre->dx /= SQ(rho_s)*B_0;
+    coordinates_centre->J *= B_0/rho_s;
+    coordinates_centre->geometry();
+    if (realistic_geometry != "none") {
+      // Load curvature operator
+      bxcv.x /= B_0;
+      bxcv.y *= SQ(rho_s);
+      bxcv.z *= SQ(rho_s);
+      Curlb_B = 2.*bxcv/coordinates_centre->Bxy;
+      G3 = coordinates_centre->G3;
+    }
+  }
+
+  if (realistic_geometry != "none") {
+    // Save additional coordinate objects
+    dump.addOnce(bxcv.x, "bxcvx");
+    dump.addOnce(bxcv.y, "bxcvy");
+    dump.addOnce(bxcv.z, "bxcvz");
+    coordinates_stag = mesh->getCoordinates(CELL_YLOW);
+    coordinates_stag->outputVars(dump);
+  }
+
   int bracket; 
   OPTION(options, bracket, 2);
   
@@ -281,18 +379,24 @@ int STORM::init(bool restarting) {
   powT_1_5_stag.setLocation(CELL_YLOW);
 
   // ******** Initialise constant fields ********
-  
-  S = FieldFactory::get()->create3D("S:function", Options::getRoot(), mesh, CELL_CENTRE, 0);
-  S_stag = FieldFactory::get()->create3D("S:function", Options::getRoot(), mesh, CELL_YLOW, 0);
-  if (!isothermal) {
-    S_E = FieldFactory::get()->create3D("S_E:function", Options::getRoot(), mesh, CELL_CENTRE, 0);
+  if (!sources_realistic_geometry) {
+    S = FieldFactory::get()->create3D("S:function", Options::getRoot(), mesh, CELL_CENTRE, 0);
+    S_stag = FieldFactory::get()->create3D("S:function", Options::getRoot(), mesh, CELL_YLOW, 0);
+    if (!isothermal) {
+      S_E = FieldFactory::get()->create3D("S_E:function", Options::getRoot(), mesh, CELL_CENTRE, 0);
+    }
+    
+    if (normalise_sources) {
+      // Normalise S and S_stag by Ly, so that we do not need Ly in the input file
+      S /= Ly;
+      S_stag /= Ly;
+      if (!isothermal) {
+        S_E /= Ly;
+      }
+    }
   }
- 
-  // Normalise S and S_stag by Ly, so that we do not need Ly in the input file
-  S /= Ly;
-  S_stag /= Ly;
-  if (!isothermal) {
-    S_E /= Ly;
+  else {
+    set_sources_realistic_geometry();
   }
 
   if(normalise_lengths){
@@ -310,6 +414,7 @@ int STORM::init(bool restarting) {
   SAVE_REPEAT(n);
   SAVE_REPEAT(phi);
   SAVE_ONCE(S);
+  SAVE_ONCE(S_stag);
   if (isothermal) {
     T = 1.;
     logT_aligned = toFieldAligned(logT, "RGN_NOX");
@@ -362,9 +467,27 @@ int STORM::init(bool restarting) {
   phi.setBoundary("phi") ;
   phi_aligned.setBoundary("phi_aligned") ;
   phi_stag.setBoundary("phi_stag") ;
-  if (!boussinesq) {
+  if (boussinesq == 0) {
     // Check that the Laplacian solver uses 3D coefficients
     ASSERT0(phiSolver->uses3DCoefs());
+  }
+  if (realistic_geometry != "none" && boussinesq > 0) {
+    phiSolver->setCoefD(1./B2);
+    phiSolver->setCoefC2(1./B2);
+  }
+  if (split_n0) {
+    if (!evolving_bcs) {
+      throw BoutException("split_n0 not implemented for evolving_bcs=false!");
+    }
+    if (boussinesq == 0) {
+      throw BoutException("split_n0 not implemented for boussinesq == 0!");
+    }
+    phiSolverxy = new LaplaceXY(mesh);
+    if (realistic_geometry != "none") {
+      phiSolverxy->setCoefs(1./B2, 0.);
+    }
+    phi2D = 0.;
+    restart.addOnce(phi2D,"phi2D");
   }
 
   if (electromagnetic) {
@@ -428,31 +551,25 @@ int STORM::init(bool restarting) {
   check_U_V_x_boundary_conditions();
   UmV_centre.setBoundary("V"); // Use same boundary conditions for UmV as for V (NB don't need parallel boundary conditions)
 
-  logn_aligned.setBoundary("n_aligned");
-  n_aligned.setBoundary("n_aligned");
-  logn_stag.setBoundary("n");
-  n_stag.setBoundary("n");
+  logn_aligned.setBoundary("logn_aligned");
+  logn_stag.setBoundary("logn");
   vort_aligned.setBoundary("vort_aligned");
   if (!isothermal) {
-    logT.setBoundary("T");
-    logT_aligned.setBoundary("T_aligned");
-    T_aligned.setBoundary("T_aligned");
-    logT_stag.setBoundary("T");
-    T_stag.setBoundary("T");
+    logT.setBoundary("logp");
+    logT_aligned.setBoundary("logT_aligned");
+    logT_stag.setBoundary("logp");
   }
 
   comms.add(logn);
   comms.add(vort) ;
-
   if (!isothermal) {
-    qpar_aligned = 0.0;
     qpar_aligned.setBoundary("qpar_aligned");
     if (electromagnetic) {
       qpar_centre.setBoundary("qpar_centre");
     }
     comms.add(logp) ;
   }
-  if(!boussinesq){
+  if(boussinesq == 0){
     uE2 = 0.0;
     uE2.setBoundary("uE2");
   }
@@ -498,7 +615,7 @@ int STORM::init(bool restarting) {
     }
   }
 
-  // set initial values of logn and logT
+  // set initial values of logn, logT, and logp
   logn = log(n);
   logT = log(T);
   logp = logn + logT;
@@ -564,13 +681,13 @@ int STORM::init(bool restarting) {
   output.write("\nDimensionless Parameters:") ;  
   output.write("\n\tmu_n0        = %e ", mu_n0) ; 
   output.write("\n\tmu_vort0     = %e ", mu_vort0) ; 
-  output.write("\n\tdiff_perp_U  = %e ", diff_perp_U);
-  output.write("\n\tdiff_perp_V  = %e ", diff_perp_V);
   output.write("\n\tnu_parallel0 = %e ", nu_parallel0) ; 
   output.write("\n\tg0           = %e ", g0) ; 
   output.write("\n\tmu           = %e ", mu) ;
   output.write("\n\tkappa_par    = %e ", kappa0);
   output.write("\n\tkappa_perp   = %e ", kappa0_perp);
+  output.write("\n\tdiff_perp_U  = %e ", diff_perp_U);
+  output.write("\n\tdiff_perp_V  = %e ", diff_perp_V);
   output.write("\nDimensionless Lengths:") ;  
   output.write("\n\tdx           = %e ", coordinates_centre->dx(mesh->xstart,mesh->ystart)) ;
   output.write("\n\tdy           = %e ", coordinates_centre->dy(mesh->xstart,mesh->ystart)) ;
@@ -632,6 +749,26 @@ int STORM::init(bool restarting) {
     mu_vort0 *= 10.;
     kappa0_perp *= 10.;
   }
+
+  if (mesh->getGlobalXIndex(mesh->xend) < 60 && mesh->periodicY(mesh->xend) && increased_resistivity_core) {
+    nu_parallel0 = 0.1;
+  }
+
+  /////////////////////////////////////////////////////////
+  // Neutral models
+  
+  TRACE("Initialising neutral models");
+  neutrals = NeutralModel::create(solver, Options::root()["neutral"]);
+  
+  // Set normalisations
+  if (neutrals != NULL) {
+    neutrals->InitialiseNeutrals(T_e0/e, n_0, B_0, rho_s, Omega_i, mu);
+    ionflux_lower = 0.;
+    ionflux_upper = 0.;
+  }
+
+  // Preconditioner
+  setPrecon((preconfunc)&STORM::precon);
 
   return 0;
 }
@@ -731,9 +868,15 @@ int STORM::rhs(BoutReal time) {
 
   //********* Laplace inversion: calculation of phi, including value at sheath *********
 
-  if (!boussinesq){
-    phiSolver->setCoefD(n);
-    phiSolver->setCoefC2(n);
+  if (boussinesq == 0){
+    if (realistic_geometry == "none") {
+      phiSolver->setCoefD(n);
+      phiSolver->setCoefC2(n);
+    }
+    else {
+      phiSolver->setCoefD(n/B2);
+      phiSolver->setCoefC2(n/B2);
+    }
   } 
 
   if (hydrodynamic) {
@@ -742,14 +885,59 @@ int STORM::rhs(BoutReal time) {
     phi = 0.;
   }
   else{
-    if(!evolving_bcs){
-      set_xguards(phi, phi_array_inner, phi_array_outer);
-    }else{
-      apply_bndry_phi();
+    if (!split_n0) {
+      if(!evolving_bcs){
+        set_xguards(phi, phi_array_inner, phi_array_outer);
+      }else{
+        apply_bndry_phi();
+      }
+      if (realistic_geometry == "none") {
+        phi = phiSolver->solve(vort, phi) ;
+      }
+      else {
+        // Set G3 = 0. to avoid instabilities
+        coordinates_centre->G3 = 0.;
+        phi = phiSolver->solve(vort, phi) ;
+        coordinates_centre->G3 = G3;
+      }
     }
-    phi = phiSolver->solve(vort, phi) ;
+    else {
+      // Solve for the n=0 component
+      Field2D vort2D = DC(vort);
+      if (mesh->firstX()) {
+        int ixs  = mesh->xstart;
+        int ixsg = ixs - 1;
+        for (int ix=ixsg; ix>=0 ; --ix) {
+          for (int iy=mesh->ystart; iy<=mesh->yend ; ++iy) {
+            phi2D(ix,iy)  = phi_bc(ixs,iy);
+          }
+        }
+      }
+      if (mesh->lastX()) {
+        int ixe = mesh->xend;
+        int ixeg = ixe + 1;
+        for (int ix=ixeg; ix<mesh->LocalNx ; ++ix) {
+          for (int iy=mesh->ystart; iy <= mesh->yend ; ++iy) {
+            phi2D(ix,iy)  = phi_bc(ixe,iy);
+          }
+        }
+      }
+      phi2D = phiSolverxy->solve(vort2D, phi2D);
+
+      // Solve for the non-axisymmetric component
+      if (realistic_geometry == "none") {
+        phi = phiSolver->solve(vort-vort2D, phi) ;
+      }
+      else {
+        // Set G3 = 0. to avoid instabilities
+        coordinates_centre->G3 = 0.;
+        phi = phiSolver->solve(vort-vort2D, phi) ;
+        coordinates_centre->G3 = G3;
+      }
+      phi += phi2D;
+    }
   }
-	
+
   phi_aligned = toFieldAligned(phi, "RGN_NOBNDRY");
   mesh->communicate(phi, phi_aligned);
   phi.applyBoundary(time);
@@ -763,9 +951,12 @@ int STORM::rhs(BoutReal time) {
   // condition
 
   // define uE2, set boundaries and communicate it (check staggered buisiness)
-  if(!boussinesq){
-    Vector3D grad_perp_phi = Grad_perp(phi);
-    uE2 = grad_perp_phi*grad_perp_phi; // Note, cannot use SQ() here because SQ() is a template that returns the same type as its argument, whereas (Vector3D)*(Vector3D) is a dot product that returns Field3D
+  if(boussinesq == 0){
+    if (realistic_geometry != "none") {
+      uE2 = Grad_perp_dot_Grad_perp(phi)/B2;
+    } else {
+      uE2 = Grad_perp_dot_Grad_perp(phi);
+    }
     mesh->communicate(uE2);
     uE2.applyBoundary(time);
   }  
@@ -820,6 +1011,15 @@ int STORM::rhs(BoutReal time) {
   if(average_radial_boundaries_core_SOL) {
     average_Z_bndry(U);
     average_Z_bndry(V);
+  }
+  if(realistic_geometry == "salpha" && mesh->firstY() && mesh->getGlobalXIndex(mesh->xend+1) == ixseps1){
+    // fix x-guard cells near the limiter for s-alpha geometry
+    int ix = mesh->xend, iy = mesh->ystart;
+    int ixp = ix+1;
+    for(int iz = 0; iz<mesh->LocalNz; ++iz){
+      U(ixp,iy,iz) = U(ix,iy,iz);
+      V(ixp,iy,iz) = V(ix,iy,iz);
+    }
   }
   U_aligned.applyBoundary(time);
   V_aligned.applyBoundary(time);
@@ -886,15 +1086,20 @@ int STORM::rhs(BoutReal time) {
     mu_n = mu_n0*n_on_sqrt_T;
     mu_vort = mu_vort0*n_on_sqrt_T;
     kappa_perp = n*kappa0_perp*n_on_sqrt_T;
+    if (realistic_geometry != "none") {
+      mu_n /= B2;
+      mu_vort /= B2;
+      kappa_perp /= B2;
+    }
   }
 
   // Precompute the curvature terms
-  Curv_n = Curv(n);
-  Curv_phi = Curv(phi);
+  Curv_n = Curv(n, n_aligned);
+  Curv_phi = Curv(phi, phi_aligned);
   if(isothermal){
     Curv_p = Curv_n;
   }else{
-    Curv_T = Curv(T);
+    Curv_T = Curv(T, T_aligned);
     Curv_p = T*Curv_n + n*Curv_T; // According to Ben has a better stability than Curv(p)
   }
   
@@ -905,38 +1110,47 @@ int STORM::rhs(BoutReal time) {
     ddt(vort) = 0.;
   }
   else {
-    if(boussinesq){
-      ddt(vort) = - bracket(phi, vort, bm, CELL_CENTRE)
-                  + Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)
-                  + UmV_centre*Grad_par_EM(logn_aligned, logn, psi_centre, CELL_CENTRE)
-                  - Vpar_Grad_par_EM(U_aligned, vort_aligned, U_centre, vort,
+    ddt(vort) = - bracket(phi, vort, bm, CELL_CENTRE)
+                - Vpar_Grad_par_EM(U_aligned, vort_aligned, U_centre, vort,
                       psi_centre, CELL_CENTRE);
+    if (boussinesq == 1 || boussinesq == 3 || boussinesq == 4) {
+      // Grad(n*Grad_perp(phi)) = n*Delp2(phi)
+      ddt(vort) += Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)
+                 + UmV_centre*Grad_par_EM(logn_aligned, logn, psi_centre, CELL_CENTRE);
     }
-    else{
-      ddt(vort) = - bracket(phi, vort, bm, CELL_CENTRE)
-                  + Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)*n
-                  + UmV_centre*Grad_par_EM(n_aligned, n, psi_centre, CELL_CENTRE)
-                  - Vpar_Grad_par_EM(U_aligned, vort_aligned, U_centre, vort,
-                      psi_centre, CELL_CENTRE)
-                  - bracket(uE2/2.,n,bm); //check normalisation of last term
+    else if (boussinesq == 0 || boussinesq == 2) {
+      // Grad(n*Grad_perp(phi)) = Delp2(phi) or non-boussinesq
+       ddt(vort) += n*( Div_par_EM(UmV_aligned, UmV_centre, psi_centre, CELL_CENTRE)
+                      + UmV_centre*Grad_par_EM(logn_aligned, logn, psi_centre, CELL_CENTRE) );
+    }
+    else {
+      throw BoutException("Boussinesq option unrecognized.");
+    }
+
+    if (boussinesq == 0) {
+      ddt(vort) -= bracket(uE2/2.,n,bm); //check normalisation of last term
+    }
+
+    if (boussinesq == 3) {
+      ddt(vort) -= S*vort + coordinates_centre->g11*DDX(S)*DDX(phi)/B2; // assumes S axisymmetric
     }
 
     if(uniform_diss_paras){
       ddt(vort) += mu_vort0*Delp2(vort) ;
     }
     else{
-     ddt(vort) +=  mu_vort*Delp2(vort) + Grad_perp_dot_Grad_perp(mu_vort,vort) ;
+     ddt(vort) +=  mu_vort*Delp2(vort) + Grad_perp_dot_Grad_perp(mu_vort, vort);
     }
 
     // Curvature terms for vorticity
-    if (boussinesq){
+    if (boussinesq == 1 || boussinesq == 3 || boussinesq == 4) {
       ddt(vort) += Curv_p/n;
     }
     else {
       ddt(vort) += Curv_p;
     }
   }
-    
+
   Field3D div_par_V = Div_par_EM(V_aligned, V_centre, psi_centre, CELL_CENTRE);
   // ***Density Equation***
   ddt(logn) = - bracket(phi, logn, bm, CELL_CENTRE)
@@ -944,22 +1158,29 @@ int STORM::rhs(BoutReal time) {
            - Vpar_Grad_par_EM(V_aligned, logn_aligned, V_centre, logn, psi_centre, CELL_CENTRE)
            + S/n;
   
-  if(uniform_diss_paras){
+  if (uniform_diss_paras) {
     ddt(logn) += mu_n0*Delp2(n)/n;
   }
-  else{
+  else {
+    // Include y derivatives??
     ddt(logn) += mu_n*Delp2(n)/n + Grad_perp_dot_Grad_perp(mu_n, logn) ;
   }
 
   // Curvature terms for density 
   ddt(logn) += -Curv_phi + Curv_p/n;
-  
+
+  if (boussinesq == 4) {
+    ddt(vort) -= vort*ddt(logn);
+  }
+
   // ***Ion parallel velocity Equation*** 
   Grad_par_T_stag = Grad_par_EM(T_aligned, T_stag, psi, CELL_YLOW);
   if (hydrodynamic) {
     Grad_par_phi_stag = mu/(mu+1.)*(Grad_par_T_stag
-                        + T_stag*fromFieldAligned(Grad_par(logn_aligned, CELL_YLOW),
-                                                  "RGN_NOBNDRY"))
+                                    + T_stag*fromFieldAligned(
+                                               Grad_par(logn_aligned, CELL_YLOW),
+                                               "RGN_NOBNDRY")
+                                   )
                         + 0.71*Grad_par_T_stag;
   } else {
     Grad_par_phi_stag = Grad_par_EM(phi_aligned, phi_stag, psi, CELL_YLOW);
@@ -971,7 +1192,7 @@ int STORM::rhs(BoutReal time) {
               - (U*S_stag)/n_stag
               + 0.71*Grad_par_T_stag;
 
-  if(diff_perp_U > 0.) {
+  if (diff_perp_U > 0.) {
     ddt(chiU) += diff_perp_U*Delp2(U);
   }
 
@@ -987,10 +1208,10 @@ int STORM::rhs(BoutReal time) {
                 + mu*Grad_par_phi_stag
                 + nu_parallel*UmV
                 - mu*T_stag*Grad_par_EM(logn_aligned, logn_stag, psi, CELL_YLOW)
-                - 1.71*mu*Grad_par_T_stag
+                - (1.71*mu)*Grad_par_T_stag
                 - (V*S_stag)/n_stag ;
 
-    if(diff_perp_V > 0.) {
+    if (diff_perp_V > 0.) {
       ddt(chiV) += diff_perp_V*Delp2(V);
     }
 
@@ -1004,9 +1225,9 @@ int STORM::rhs(BoutReal time) {
     //This has been rewritten as follows to speed up the code.
     qpar_aligned = toFieldAligned(
         T_stag*((-kappa0)*powT_1_5_stag*Grad_par_T_stag - 0.71*n_stag*UmV), "RGN_NOBNDRY");
+    mesh->communicate(qpar_aligned);
 
     //Set heat flux boundary condition
-    mesh->communicate(qpar_aligned);
     qpar_aligned.applyBoundary(time);
     if (!symmetry_plane){
       qsheath_ydown_staggered(qpar_aligned, T_sheath_lower, n_sheath_lower, V_sheath_lower, mu);
@@ -1031,14 +1252,17 @@ int STORM::rhs(BoutReal time) {
              - 2./3.*0.71*UmV_centre*Grad_par_EM(logT_aligned, logT, psi_centre, CELL_CENTRE)
              - (5./3.)*div_par_V
              + 2.0/(3.0*mu)*nu_parallel0*(pow(T, -2.5, "RGN_NOBNDRY"))*n*SQ(UmV_centre)
-             + Tcoef*S_E
-             + S*SQ(V_centre)/(3.*mu*p);
+             + Tcoef*S_E;
 
     if(uniform_diss_paras){
       ddt(logp) += Tcoef*kappa0_perp*Delp2(T);
     }
     else{
       ddt(logp) += Tcoef*(kappa_perp*Delp2(T) + Grad_perp_dot_Grad_perp(kappa_perp, T));
+    }
+
+    if (S_in_peq) {
+      ddt(logp) += S*SQ(V_centre)/(3.*mu*p);
     }
 
     //Curvature terms for electron temperature
@@ -1054,6 +1278,47 @@ int STORM::rhs(BoutReal time) {
     }
   }
 
+  // Neutral gas
+  if (neutrals) {
+    TRACE("Neutral gas model");
+   
+    // Fluxes at targets for boundary conditions
+    ionflux_lower = abs(n_sheath_lower*U_sheath_lower);
+    ionflux_upper = abs(n_sheath_upper*U_sheath_upper);
+    neutrals->setRecycledFlux(ionflux_lower, ionflux_upper);
+ 
+    // Update neutral gas model
+    neutrals->update(n, n_stag, U, V, T, T_stag, time);
+
+    // Add sources/sinks to plasma equations
+    ddt(logn) -= neutrals->S/n;
+
+    Field3D Son_stag = neutrals->S_stag/n_stag;
+    ddt(chiU) += -neutrals->Fi/n_stag + Son_stag*U;
+
+    ddt(chiV) += -neutrals->Fe/n_stag + Son_stag*V;
+
+    if (boussinesq == 2) {
+      ddt(vort) -= neutrals->Fperp*vort + Grad_perp_dot_Grad_perp(neutrals->Fperp, phi)/B2;
+    }
+    else if (boussinesq == 1 || boussinesq == 3 || boussinesq == 4) {
+      ddt(vort) -= (neutrals->Fperp*vort + Grad_perp_dot_Grad_perp(neutrals->Fperp, phi)/B2)/n;
+    }
+    else {
+      ddt(vort) -= neutrals->Fperp*vort/n + Grad_perp_dot_Grad_perp(neutrals->Fperp/n, phi)*n/B2;
+    }
+
+    if (!isothermal) {
+      ddt(logp) -= Tcoef*neutrals->Rp;
+    }
+
+  }
+
   return 0;
 }
 
+int STORM::precon(BoutReal t, BoutReal gamma, BoutReal delta) {
+  // Neutral gas preconditioning
+  if (neutrals != NULL) neutrals->precon(t, gamma, delta);
+  return 0;
+}

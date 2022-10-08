@@ -24,7 +24,7 @@ else
   $(error "The 'make.config' file does not exist. You must create it for STORM to compile. See the example in 'make.config.example'")
 endif
 
-SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/fast_output.cxx
+SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/fast_output.cxx neutral-rates.cxx D-vpar.cxx neutral-model.cxx
 TARGET = storm
 
 GIT_VERSION := $(shell git describe --abbrev=40 --dirty --always --tags)
