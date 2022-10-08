@@ -24,6 +24,10 @@ else
   $(error "The 'make.config' file does not exist. You must create it for STORM to compile. See the example in 'make.config.example'")
 endif
 
+ifeq ($(wildcard ../shared/BoutEquation/equation.hxx),)
+  $(error "BoutEquation header missing - try running `git submodule update --init --recursive`")
+endif
+
 SOURCEC = storm.cxx boundaries.cxx initialise.cxx monitors.cxx operators.cxx utilities.cxx ../shared/fast_output.cxx ../shared/BoutEquation/equation.cxx neutral-rates.cxx D-vpar.cxx neutral-model.cxx
 TARGET = storm
 

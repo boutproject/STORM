@@ -8,7 +8,7 @@ zmin                  = 0
 zmax                  = 15.9155             # 1.5915*2pi = 10, z is fracs of 2pi
 
 #NXPE                 = 6                   # Sets the number of processors in the x direction 
-MXG                   = 2                   # Number of X guard cells
+MXG                   = 1                   # Number of X guard cells
 
 [mesh:ddy]
 upwind                = U2
@@ -21,9 +21,9 @@ second                = C2
 StaggerGrids          = true                # Enables staggered grids
 Ly                    = 5500.0
 Lx                    = 150.0
-nx                    = 196                 # including 4 guard cells
+nx                    = 192 + 2*MXG         # including 4 guard cells
 ny                    = 16                  # excluding guard cells
-dx                    = Lx/(nx-4)
+dx                    = Lx/(nx - 2*MXG)
 dy                    = Ly/ny 
 
 ixseps1               = -1           # Set x location of separatrix 1

@@ -351,102 +351,168 @@ void STORM::set_sources_realistic_geometry() {
     // Option useful to start a simulation, while the turbulence is not yet sustaining the profiles
     BoutReal y, dy;
     S_E += 1.;
+    int ixseps_inner = std::min(ixseps1, ixseps2);
+    int ixseps_outer = std::max(ixseps1, ixseps2);
     for(int ix = mesh->xstart; ix <= mesh->xend; ++ix){
-      if (mesh->getGlobalXIndex(ix) < ixseps1) {
+      if (mesh->getGlobalXIndex(ix) < ixseps_inner) {
         if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
-          //PF region in between 0 and jyseps1_1
+          // PF region in between 0 and jyseps1_1 (lower inner divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(jyseps1_1 + 1));
+              // 0 < y < 0.5 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         } 
         else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
-          //PF region between jyseps2_1 and ny_inner
+          // PF region between jyseps2_1 and ny_inner (upper inner divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+              // 0.5 < y < 1.0 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         }
         else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
-          //PF region between ny_inner and jyseps1_2
+          // PF region between ny_inner and jyseps1_2 (upper outer divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+              // 0 < y < 0.5 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         }
         else if(mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
-          //PF region between jyseps2_2 and NyGlobal
+          // PF region between jyseps2_2 and NyGlobal (lower outer divertor)
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps2_2 - 1));
+              // 0.5 < y < 1.0 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         }
       }
-      else if (mesh->getGlobalXIndex(ix) >= ixseps1 && mesh->getGlobalXIndex(ix) < ixseps2) {
-        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) {
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(jyseps2_1 + 1));
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1) {
-          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
-            for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps1_2 - 1));
-              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_2) - 0.5)*dy + 0.5;
-              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
-            }
-          }
-        }
-      }
-      else if (mesh->getGlobalXIndex(ix) >= ixseps2) {
+      else if (mesh->getGlobalXIndex(ix) >= ixseps_outer) {
         if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          // SOL region on inner side
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 1./((double)(ny_inner));
+              // 0 < y < 1 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }
         }
         else {
+          // SOL region on outer side
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 1./((double)(mesh->GlobalNy -2*mesh->ystart - ny_inner));
+              // 0 < y < 1 in this region
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+      }
+      else if (ixseps1< ixseps2){
+        // inter-separatrix for lower double null
+        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_1) {
+          // inter-separatrix including lower inner divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps2_1 + 1));
+              // 0 < y < 0.5 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          // inter-separatrix in upper inner divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(ny_inner - jyseps2_1 - 1));
+              // 0.5 < y < 1.0 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_1) - 0.5)*dy + 0.5;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_2) {
+          // inter-separatrix in upper outer divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_2 - ny_inner + 1));
+              // 0 < y < 0.5 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1) {
+          // inter-separatrix including lower outer divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps1_2 - 1));
+              // 0.5 < y < 1.0 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_2) - 0.5)*dy + 0.5;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+      }
+      else if (ixseps1> ixseps2){
+        //inter-separatrix for upper double null
+        if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps1_1) {
+          // inter-separatrix in lower inner divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps1_1 + 1));
+              // 0 < y < 0.5 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_1 && mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
+          // inter-separatrix including upper inner divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(ny_inner - jyseps1_1 - 1));
+              // 0.5 < y < 1.0 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_1) - 0.5)*dy + 0.5;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) >= ny_inner &&  mesh->getGlobalYIndexNoBoundaries(mesh->yend) <= jyseps2_2) {
+          // inter-separatrix including upper outer divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(jyseps2_2 - ny_inner + 1));
+              // 0 < y < 0.5 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
+              S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
+            }
+          }
+        }
+        else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps2_2) {
+          // inter-separatrix in lower outer divertor leg
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
+            for(int iz = 0; iz < mesh->LocalNz; ++iz){
+              dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps2_2 - 1));
+              // 0.5 < y < 1.0 in this region
+              y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
           }

@@ -22,8 +22,12 @@ public:
               BoutReal time);
   
   void setRecycledFlux(const FieldPerp& ionflux_lower, const FieldPerp& ionflux_upper) {
-    recycled_lower = Rc*ionflux_lower; 
-    recycled_upper = Rc*ionflux_upper;
+    if (mesh->hasBndryLowerY()) {
+        recycled_lower = Rc*ionflux_lower;
+    }
+    if (mesh->hasBndryUpperY()) {
+        recycled_upper = Rc*ionflux_upper;
+    }
   }
  
   void precon(BoutReal t, BoutReal gamma, BoutReal delta); 

@@ -171,13 +171,16 @@ private:
                                 // If equilibrium_data_file is an empty string (the default value)
                                 // then read 1d initial profiles from .dat binary files
 
-  BoutReal mu_n0 ;              // density diffusion coefficient
-  BoutReal mu_vort0 ;           // ion viscosity
+  BoutReal mu_n0_scalar;        // density diffusion coefficient
+  Field2D mu_n0;
+  BoutReal mu_vort0_scalar;     // ion viscosity
+  Field2D mu_vort0;
   BoutReal mu ;                 // m_i/m_e
   BoutReal nu_parallel0 ;       // electron-ion friction
   BoutReal g0 ; 
   BoutReal kappa0 ;	            // parallel heat conduction
-  BoutReal kappa0_perp ;        
+  BoutReal kappa0_perp_scalar;
+  Field2D kappa0_perp;
   BoutReal diff_perp_U;
   BoutReal diff_perp_V;
   BoutReal phi_wall ;           // potential of target walls. 
@@ -230,7 +233,8 @@ private:
   bool sources_realistic_geometry;    // flag for sources for realistic geometries
   bool sources_realisticgeometry_background; // flag for background (useful for initial phase)
   bool isshifted;              // chech if shifted parallel transform
-  bool increased_dissipation_xbndries; // flag to increase the perpendicular dissipation near the inner and outer boundaries
+  int increased_dissipation_xbndries; // increase the perpendicular dissipation for this many grid points beside the inner and outer boundaries
+  BoutReal xbndry_dissipation_factor; // factor to increase the perpendicular dissipation by in the region given by xbndry_dissipation_factor
   bool increased_resistivity_core; // flag to increase resistivity in core region
   bool normalise_sources;      // flag for normalise sources to Ly
 
