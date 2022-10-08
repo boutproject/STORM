@@ -5,8 +5,8 @@
 #include <derivs.hxx>
 #include <bout/constants.hxx>
 
-NeutralDVpar::NeutralDVpar(Solver *solver, Options &options)
-    : NeutralModel(options), my_output_monitor(this) {
+NeutralDVpar::NeutralDVpar(Solver *solver, Options &options, Datafile &dump)
+    : NeutralModel(options, dump), my_output_monitor(this) {
 
   mesh = bout::globals::mesh;
   coordinates_centre = mesh->getCoordinates(CELL_CENTRE);
@@ -165,8 +165,7 @@ void NeutralDVpar::update(const Field3D& n, const Field3D& n_stag, const Field3D
                           const Field3D& V, const Field3D& T, const Field3D& T_stag,
                           BoutReal time) {
   TRACE("NeutralDVpar::update");
-  ddt(lognn) = 0.;
-  ddt(nvn) = 0.;
+  rhs_counter++;
 
   Tn = Tn0/T0;
   Tn_stag = Tn0/T0;
@@ -278,24 +277,31 @@ void NeutralDVpar::update(const Field3D& n, const Field3D& n_stag, const Field3D
   }
   Field3D nn_vperp_GradPerpvn = nn_stag*vnperp_GradPerpvn;
 
-  ddt(lognn) += - vn_centre*myGrad_par(lognn_aligned, CELL_CENTRE)
-                - myDiv_par(vn_aligned, CELL_CENTRE)
-                + Dn*LaplPerpnn/nn
-                + GradPerpDn_GradPerpnn/nn
-                + S/nn
-                + Snn/nn;
+  neutral_density_equation["parallel_advection"] =
+    - vn_centre*myGrad_par(lognn_aligned, CELL_CENTRE)
+    - myDiv_par(vn_aligned, CELL_CENTRE);
+  neutral_density_equation["perpendicular_diffusion"] =
+    Dn*LaplPerpnn/nn + GradPerpDn_GradPerpnn/nn;
+  neutral_density_equation["ionisation_recombination"] = S/nn;
+  neutral_density_equation["neutral_source"] = Snn/nn;
 
-  ddt(nvn) += - vn*myGrad_par(nvn_aligned, CELL_YLOW)
-              - nvn*myDiv_par(vn_aligned, CELL_YLOW)
-              - Tn_stag*myGrad_par(nn_aligned, CELL_YLOW)
-              - vn*myInterp_to(div_vnperpnn_aligned, CELL_YLOW)
-              - nn_vperp_GradPerpvn
-              + myDiv_par(Dn_nn_Gradpar_vn_aligned, CELL_YLOW)
-              + Fi 
-              + Fe/mu
-              + Snvn;
+  neutral_momentum_equation["parallel_advection"] =
+    - vn*myGrad_par(nvn_aligned, CELL_YLOW)
+    - nvn*myDiv_par(vn_aligned, CELL_YLOW);
+  neutral_momentum_equation["density_gradient"] =
+    - Tn_stag*myGrad_par(nn_aligned, CELL_YLOW);
+  neutral_momentum_equation["perpendicular_diffusion"] =
+    - vn*myInterp_to(div_vnperpnn_aligned, CELL_YLOW)
+    - nn_vperp_GradPerpvn;
+  neutral_momentum_equation["parallel_diffusion"] =
+    myDiv_par(Dn_nn_Gradpar_vn_aligned, CELL_YLOW);
+  neutral_momentum_equation["ion_friction"] = Fi;
+  neutral_momentum_equation["electron_friction"] = Fe/mu;
+  neutral_momentum_equation["neutral_momentum_source"] = Snvn;
 
-  if (munvn > 0.) ddt(nvn) += munvn*Delp2(nvn);
+  if (munvn > 0.) {
+    neutral_momentum_equation["neutral_viscosity"] = munvn*Delp2(nvn);
+  }
 
   if (mesh->hasBndryLowerY()) {
     int j = mesh->ystart;
@@ -494,14 +500,18 @@ void NeutralDVpar::recycleFluxes(BoutReal time) {
    
   if (bndry_neutrals == 2 || bndry_neutrals == 3) {
     // Sources to recycle density and momentum in the first cell 
+    auto neutral_density_recycling =
+      neutral_density_equation["recycling_source"].localAccessor();
+    auto neutral_momentum_recycling =
+      neutral_momentum_equation["recycling_source"].localAccessor();
     j = mesh->ystart;
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       i = r.ind;
       BoutReal dd = 1./( sqrt(coordinates_stag->g_22(i,j)) * coordinates_stag->dy(i,j) );
       for (int k = 0; k < mesh->LocalNz; k++) {
         BoutReal dnndt = recycled_lower(i,k)*dd;
-        ddt(lognn)(i,j,k) += dnndt/nn(i,j,k);
-        ddt(nvn)(i,j+1,k) += dnndt * vnth;
+        neutral_density_recycling(i,j,k) += dnndt/nn(i,j,k);
+        neutral_momentum_recycling(i,j+1,k) += dnndt * vnth;
       }
     }
 
@@ -511,8 +521,8 @@ void NeutralDVpar::recycleFluxes(BoutReal time) {
       BoutReal dd = 1./( sqrt(coordinates_stag->g_22(i,j+1)) * coordinates_stag->dy(i,j+1) );
       for (int k = 0; k < mesh->LocalNz; k++) {
         BoutReal dnndt = recycled_upper(i,k)*dd;
-        ddt(lognn)(i,j,k) += dnndt/nn(i,j,k);
-        ddt(nvn)(i,j,k)   -= dnndt * vnth;
+        neutral_density_recycling(i,j,k) += dnndt/nn(i,j,k);
+        neutral_momentum_recycling(i,j,k) -= dnndt * vnth;
       }
     }
   }

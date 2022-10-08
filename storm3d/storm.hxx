@@ -29,7 +29,9 @@
 #include <bout_types.hxx>
 #include <interpolation.hxx>
 #include "../shared/fast_output.hxx"
+#include "../shared/BoutEquation/equation.hxx"
 #include "neutral-model.hxx"
+#include "storm_version.hxx"
 
 class STORM : public PhysicsModel{
 public:
@@ -71,8 +73,8 @@ protected:
   int precon(BoutReal t, BoutReal gamma, BoutReal delta);
 private:
 
-  Options* globalOptions;
-  Options* options;
+  Options& globalOptions{Options::root()};
+  Options& options{*globalOptions.getSection("storm")};
   Coordinates* coordinates_centre;
   Coordinates* coordinates_stag;
 
@@ -99,6 +101,19 @@ private:
   void set_equilibrium_value_1d_array(BoutReal* &f_inner, BoutReal* &f_outer, const Field3D &f3d);
 
   void read_equilibrium_file(BoutReal * data, const char * fname);
+
+  // rhs_counter is used by Equation objects to know if they have to reset for a new rhs evaluation
+  int rhs_counter = 0;
+  Equation vorticity_equation{vort, "vort", globalOptions["save_equations"], dump,
+                              rhs_counter};
+  Equation density_equation{logn, "logn", globalOptions["save_equations"], dump,
+                            rhs_counter};
+  Equation ion_momentum_equation{chiU, "chiU", globalOptions["save_equations"], dump,
+                                 rhs_counter};
+  Equation electron_momentum_equation{chiV, "chiV", globalOptions["save_equations"], dump,
+                                      rhs_counter};
+  Equation electron_pressure_equation{logp, "logp", globalOptions["save_equations"], dump,
+                                      rhs_counter};
 
   Field3D logn;
   Field3D n;                   // density
@@ -205,6 +220,7 @@ private:
   bool initial_perturbation ;  // Switch to add perturbations specified in input file onto the equilibrium
   bool verbose ;	       // Add extra output
   bool evolving_bcs;           // Switch to activate averaged Neumann boundary conditions for phi
+  bool reset_evolving_bcs;     // Re-initialise, ignoring history of averaged boundary condition for phi when restarting
   bool use_psi_boundary_solver;// Use a Laplace solver to invert for psi on the boundary points, rather than extrapolating
   bool save_aligned_fields;    // Switch to save field-aligned versions of fields to dump files
   bool average_radial_boundaries_core_SOL; // Ad hoc boundary conditions in radial direction
@@ -221,6 +237,7 @@ private:
   Vector2D bxcv, Curlb_B;      // Vectors for realistic curvature operator
   Field2D B2;                  // Bxy*Bxy
   Field2D G3;                  // Useful to temporary overwrite G3
+  Field2D Rxy, Zxy, psixy;     // Used to save extra grid info to dump files
 
   // BoutReal *phi_x_boundary ; 
   FILE *file ; 

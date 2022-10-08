@@ -417,7 +417,7 @@ void STORM::initialise_blob(const char * imp_section){
   BoutReal delta_front = -1.;   // Parameter used to control gradient of the density blob front. 0 = step function
   BoutReal delta_front_T = -1.; // Parameter used to control gradient of the temperature blob front. 0 = step function
   bool A_relative_to_bg;        // Switch for controlling whether the amplitude of the blob is relative to the midplane density or not.
-  Options *blob_options = Options::getRoot()->getSection(imp_section);
+  Options &blob_options = *globalOptions.getSection(imp_section);
   
   OPTION(blob_options, delta_perp,          10) ;
   OPTION(blob_options, elongation,           1) ;
@@ -571,17 +571,16 @@ void STORM::add_noise(){
 
 // Add a function given in the input file to a field
 void STORM::add_perturbation(Field3D &f, const std::string name) {
-  Options *options = Options::getRoot()->getSection("filaments");
-  Field3D perturbation = FieldFactory::get()->create3D(name, options, mesh, f.getLocation(), 0);
+  Options &options = *globalOptions.getSection("storm");
+  Field3D perturbation = FieldFactory::get()->create3D(name, &options, mesh, f.getLocation(), 0);
   f += perturbation;
 }
 
 // For consistency, U and V should have the same radial boundary conditions, as
 // V's boundary conditions are applied to UmV_centre
 void STORM::check_U_V_x_boundary_conditions() {
-  auto options = *globalOptions;
-  ASSERT0(options["U"]["bndry_xin"].as<std::string>()
-      == options["V"]["bndry_xin"].as<std::string>());
-  ASSERT0(options["U"]["bndry_xout"].as<std::string>()
-      == options["V"]["bndry_xout"].as<std::string>());
+  ASSERT0(globalOptions["U"]["bndry_xin"].as<std::string>()
+      == globalOptions["V"]["bndry_xin"].as<std::string>());
+  ASSERT0(globalOptions["U"]["bndry_xout"].as<std::string>()
+      == globalOptions["V"]["bndry_xout"].as<std::string>());
 }

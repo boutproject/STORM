@@ -261,14 +261,14 @@ Field3D STORM::this_Grad_perp2(const Field3D &f) {
   // If the x and z derivative schemes are not C2, then this operator is not
   // the inverse of the multigrid Laplacian solver
   std::string first;
-  OPTION(globalOptions->getSection("mesh:ddx"), first, "C2");
+  OPTION(globalOptions.getSection("mesh:ddx"), first, "C2");
   ASSERT1(first == "C2");
   std::string second;
-  OPTION(globalOptions->getSection("mesh:ddx"), second, "C2");
+  OPTION(globalOptions.getSection("mesh:ddx"), second, "C2");
   ASSERT1(second == "C2");
-  OPTION(globalOptions->getSection("mesh:ddz"), first, "FFT");
+  OPTION(globalOptions.getSection("mesh:ddz"), first, "FFT");
   ASSERT1(first == "C2");
-  OPTION(globalOptions->getSection("mesh:ddz"), second, "FFT");
+  OPTION(globalOptions.getSection("mesh:ddz"), second, "FFT");
   ASSERT1(second == "C2");
 #endif
   Coordinates* coords = f.getCoordinates();
@@ -284,14 +284,14 @@ Field3D STORM::this_Grad_perp_dot_Grad_perp(const Field3D &f, const Field3D &g) 
   // If the x and z derivative schemes are not C2, then this operator is not
   // the inverse of the multigrid Laplacian solver
   std::string first;
-  OPTION(globalOptions->getSection("mesh:ddx"), first, "C2");
+  OPTION(globalOptions.getSection("mesh:ddx"), first, "C2");
   ASSERT1(first == "C2");
   std::string second;
-  OPTION(globalOptions->getSection("mesh:ddx"), second, "C2");
+  OPTION(globalOptions.getSection("mesh:ddx"), second, "C2");
   ASSERT1(second == "C2");
-  OPTION(globalOptions->getSection("mesh:ddz"), first, "FFT");
+  OPTION(globalOptions.getSection("mesh:ddz"), first, "FFT");
   ASSERT1(first == "C2");
-  OPTION(globalOptions->getSection("mesh:ddz"), second, "FFT");
+  OPTION(globalOptions.getSection("mesh:ddz"), second, "FFT");
   ASSERT1(second == "C2");
 #endif
   Coordinates* coords = f.getCoordinates();
@@ -387,7 +387,7 @@ void STORM::set_sources_realistic_geometry() {
           //PF region between jyseps2_2 and NyGlobal
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(mesh->GlobalNy - jyseps2_2 - 1));
+              dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps2_2 - 1));
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps2_2) - 0.5)*dy + 0.5;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
@@ -425,7 +425,7 @@ void STORM::set_sources_realistic_geometry() {
         else if (mesh->getGlobalYIndexNoBoundaries(mesh->ystart) > jyseps1_2-1) {
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 0.5/((double)(mesh->GlobalNy - jyseps1_2 - 1));
+              dy = 0.5/((double)(mesh->GlobalNy -2*mesh->ystart - jyseps1_2 - 1));
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy) - jyseps1_2) - 0.5)*dy + 0.5;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
@@ -434,7 +434,7 @@ void STORM::set_sources_realistic_geometry() {
       }
       else if (mesh->getGlobalXIndex(ix) >= ixseps2) {
         if (mesh->getGlobalYIndexNoBoundaries(mesh->yend) < ny_inner) {
-          for(int iy = mesh->xstart; iy <= mesh->yend; ++iy){
+          for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
               dy = 1./((double)(ny_inner));
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) + 0.5)*dy;
@@ -445,7 +445,7 @@ void STORM::set_sources_realistic_geometry() {
         else {
           for(int iy = mesh->ystart; iy <= mesh->yend; ++iy){
             for(int iz = 0; iz < mesh->LocalNz; ++iz){
-              dy = 1./((double)(mesh->GlobalNy - ny_inner));
+              dy = 1./((double)(mesh->GlobalNy -2*mesh->ystart - ny_inner));
               y = ((double)(mesh->getGlobalYIndexNoBoundaries(iy)) - ny_inner + 0.5)*dy;
               S(ix,iy,iz) += exp(10.*std::abs(y-0.5))/(exp(5.0)-1.0);
             }
