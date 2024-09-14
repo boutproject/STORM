@@ -28,7 +28,7 @@
 #include <bout/invert/laplacexy.hxx>
 #include <bout_types.hxx>
 #include <interpolation.hxx>
-#include "../shared/fast_output.hxx"
+#include "../shared/BoutFastOutput/fast_output.hxx"
 #include "../shared/BoutEquation/equation.hxx"
 #include "neutral-model.hxx"
 
@@ -44,15 +44,6 @@ protected:
     if(fast_output.enable_timestep) {
       ret = fast_output.monitor_method(simtime);
       if (ret) return ret; // return immediately if ret is non-zero (indicating error)
-    }
-    if( monitor_minmaxmean ) {
-      if(minmaxmean_timelast < 0.){
-        minmaxmean_timelast = simtime;
-      }else if(simtime - minmaxmean_timelast > 5.){
-        minmaxmean_timelast = simtime;
-        output << "t = " << simtime << endl;
-        printMinMaxMean();
-      }
     }
     return ret;
   }
@@ -312,9 +303,6 @@ private:
                                  const BoutReal peak_enhancement);
 
 
-  // Internal variable for monitor
-  BoutReal minmaxmean_timelast = -1.;
-
   //////////////////////////////////////////////////////////////
   // Object to handle fast output
   //////////////////////////////////////////////////////////////
@@ -374,6 +362,32 @@ private:
   // Print minimum, maximum and mean of evolving variables. Used when
   // monitor_minmaxmean=true
   void printMinMaxMean();
+
+  class MinMaxMeanMonitor : public Monitor {
+  public:
+    MinMaxMeanMonitor(STORM& storm_in) : storm(storm_in) {
+      BoutReal timestep = Options::root()["TIMESTEP"]
+                              .doc("Output time step size").withDefault(1.0);
+
+      BoutReal minmaxmean_timestep = 5.0;
+      if (timestep > minmaxmean_timestep) {
+        // Find integer fraction of timestep that's close to minmaxmean_timestep
+        int n = std::round(timestep / minmaxmean_timestep);
+
+        // Set MinMaxMeanMonitor 'timestep' to something close to minmaxmean_timestep
+        setTimestep(timestep / n);
+      }
+    }
+  private:
+    int call(Solver* UNUSED(solver), BoutReal simtime, int UNUSED(iter),
+             int UNUSED(NOUT)) override {
+      output << "t = " << simtime << endl;
+      storm.printMinMaxMean();
+      return 0;
+    }
+    STORM& storm;
+  };
+  MinMaxMeanMonitor minmaxmean_monitor{*this};
 };
 
 #endif // __ FILAMENTS_H__

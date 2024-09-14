@@ -75,7 +75,6 @@ private:
 
   bool updaterates;
   BoutReal monitor_timelast = -1.;
-  BoutReal minmaxmean_timelast = -1.;
   int timestepmonitor(BoutReal simtime);
 
   // Need global list of all NeutralDVpar instances, to iterate over in the
@@ -102,15 +101,32 @@ private:
     return fromFieldAligned( Div_par(var_aligned, outloc) , "RGN_NOBNDRY");
   }
 
-  class OutputMonitor : public Monitor {
+  class MinMaxMeanMonitor : public Monitor {
   public:
-    OutputMonitor(NeutralDVpar* ndvp_in, BoutReal timestep=-1)
-      : Monitor(timestep), neutral_dvpar(ndvp_in) {};
-    int call(Solver *solver, BoutReal simtime, int iter, int NOUT) override;
+    MinMaxMeanMonitor(NeutralDVpar& ndvp_in)
+        : neutral_dvpar(ndvp_in) {
+
+      BoutReal timestep = Options::root()["TIMESTEP"]
+                              .doc("Output time step size").withDefault(1.0);
+
+      BoutReal minmaxmean_timestep = 5.0;
+      if (timestep > minmaxmean_timestep) {
+        // Find integer fraction of timestep that's close to minmaxmean_timestep
+        int n = std::round(timestep / minmaxmean_timestep);
+
+        // Set MinMaxMeanMonitor 'timestep' to something close to minmaxmean_timestep
+        setTimestep(timestep / n);
+      }
+    };
+    int call(Solver* UNUSED(solver), BoutReal UNUSED(simtime), int UNUSED(iter),
+             int UNUSED(NOUT)) override {
+      neutral_dvpar.printMinMaxMean();
+      return 0;
+    }
   private:
-    NeutralDVpar* neutral_dvpar;
+    NeutralDVpar& neutral_dvpar;
   };
-  OutputMonitor my_output_monitor;
+  MinMaxMeanMonitor minmaxmean_monitor;
 
   // Print minimum, maximum and mean of evolving variables. Used when
   // monitor_minmaxmean=true
