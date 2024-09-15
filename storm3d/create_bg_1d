@@ -43,7 +43,11 @@ from sys import exit
 import argparse
 
 scriptDirectory = os.path.dirname(os.path.realpath(__file__))
-executable = os.path.join(scriptDirectory,"storm ")
+executable = os.path.join(scriptDirectory, "storm")
+if not executable.exists():
+    executable = os.path.join(scriptDirectory, "..", "storm")
+if not executable.exists():
+    executable = os.path.join(scriptDirectory, "..", "build", "storm")
 matlabfilename = "/background"
 restarting = False
 run_1d = True
