@@ -39,6 +39,8 @@ runOutput = os.path.join(runOutputDir,"BOUT.dmp.*")
 runExpectedOutput = os.path.join(runOutputDir,"expectedResults","BOUT.dmp.nc")
 executable = Path("..", "..", "storm")
 if not executable.exists():
+    executable = Path("..", "..", "build", "storm")
+if not executable.exists():
     executable = Path("..", "..", "storm3d", "storm")
 # x-boundary cells are not set or used for these variables, so don't check them
 noXBoundaryVariables = ['qpar', 'chiU', 'chiV']
